@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
-import json
 import requests
 import xml.etree.ElementTree as ET
 import anthropic
 import time
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 st.set_page_config(page_title="Hot Topics Dashboard", layout="wide")
 
@@ -34,7 +33,12 @@ def coletar_google_trends(regiao="BR", max_resultados=10):
         topicos = []
         for item in root.findall(".//item")[:max_resultados]:
             titulo = item.find("title").text
-            topicos.append({"titulo": titulo, "plataforma": "google_trends", "metrica_principal": 0, "metrica_secundaria": 0})
+            topicos.append({
+                "titulo": titulo,
+                "plataforma": "google_trends",
+                "metrica_principal": 0,
+                "metrica_secundaria": 0
+            })
         return topicos
     except:
         return []
@@ -76,7 +80,7 @@ def coletar_reddit(client_id, client_secret, max_resultados=10):
         subreddits = ["brasil", "investimentos", "futebol", "tecnologia"]
         topicos = []
         for sub in subreddits:
-            for post in reddit.subreddit(sub).hot(limit=max_resultados//len(subreddits)):
+            for post in reddit.subreddit(sub).hot(limit=max_resultados // len(subreddits)):
                 topicos.append({
                     "titulo": post.title,
                     "plataforma": "reddit",
@@ -91,8 +95,12 @@ def coletar_meta(access_token, max_resultados=10):
     if not access_token:
         return []
     try:
-        url = f"https://graph.facebook.com/v22.0/me/media"
-        params = {"fields": "id,caption,like_count,comments_count", "limit": max_resultados, "access_token": access_token}
+        url = "https://graph.facebook.com/v22.0/me/media"
+        params = {
+            "fields": "id,caption,like_count,comments_count",
+            "limit": max_resultados,
+            "access_token": access_token
+        }
         resposta = requests.get(url, params=params, timeout=10).json()
         topicos = []
         for post in resposta.get("data", []):
@@ -171,35 +179,28 @@ def classificar_pmg(topico):
         else: return "P"
     return "P"
 
-def gerar_resumo(topico, client):
+def gerar_analise_ia(topico):
     if not client:
-        return "IA não configurada."
+        return "IA não configurada.", "IA não configurada."
     try:
         classificacao_texto = {"P": "emergente", "M": "crescendo", "G": "mainstream"}[topico["classificacao"]]
-        prompt = f"""Você é um analista de social listening. Gere um resumo curto sobre o tópico "{topico['titulo']}" que está {classificacao_texto} nas redes sociais brasileiras. Máximo 2 frases em português."""
-        resposta = client.messages.create(
+        
+        resp_resumo = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=150,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": f"""Analista de social listening. Resumo curto sobre "{topico['titulo']}" que está {classificacao_texto} nas redes sociais brasileiras. Máximo 2 frases em português."""}]
         )
-        return resposta.content[0].text
-    except:
-        return "Não foi possível gerar resumo."
-
-def gerar_recomendacao(topico, client):
-    if not client:
-        return "IA não configurada."
-    try:
-        classificacao_texto = {"P": "emergente", "M": "crescendo", "G": "mainstream"}[topico["classificacao"]]
-        prompt = f"""Você é um estrategista de marketing. Para o tópico "{topico['titulo']}" classificado como {classificacao_texto}, recomende em 2 frases se uma marca deve ENTRAR, OBSERVAR ou EVITAR, com justificativa."""
-        resposta = client.messages.create(
+        time.sleep(0.3)
+        
+        resp_rec = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=150,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": f"""Estrategista de marketing. Para "{topico['titulo']}" classificado como {classificacao_texto}, recomende em 2 frases se uma marca deve ENTRAR, OBSERVAR ou EVITAR, com justificativa."""}]
         )
-        return resposta.content[0].text
-    except:
-        return "Não foi possível gerar recomendação."
+        
+        return resp_resumo.content[0].text, resp_rec.content[0].text
+    except Exception as e:
+        return f"Erro: {e}", f"Erro: {e}"
 
 # ════════════════════════════════════════════════════════════
 # PIPELINE AUTOMÁTICO — atualiza a cada 1 hora
@@ -214,12 +215,8 @@ def rodar_pipeline():
     todos += coletar_meta(META_ACCESS_TOKEN)
     todos += coletar_twitter(TWITTER_BEARER_TOKEN)
     todos += coletar_tiktok(TIKTOK_API_KEY)
-
     for t in todos:
         t["classificacao"] = classificar_pmg(t)
-        t["resumo"] = ""
-        t["recomendacao_marca"] = ""
-
     return todos
 
 # ════════════════════════════════════════════════════════════
@@ -276,17 +273,25 @@ with aba1:
         if filtro_plataforma != "Todas":
             df_filtrado = df_filtrado[df_filtrado["plataforma"] == filtro_plataforma]
 
-        for _, row in df_filtrado.iterrows():
+        if "analises" not in st.session_state:
+            st.session_state.analises = {}
+
+        for idx, row in df_filtrado.iterrows():
             emoji = {"P": "🌱", "M": "📈", "G": "🔥"}[row["classificacao"]]
-    with st.expander(f"{emoji} [{row['classificacao']}] {row['titulo']} — {row['plataforma']}"):
-        if st.button(f"Gerar análise IA", key=row['titulo']):
-            with st.spinner("Gerando análise..."):
-                resumo = gerar_resumo(row.to_dict(), client)
-                recomendacao = gerar_recomendacao(row.to_dict(), client)
-            st.markdown(f"**Resumo:** {resumo}")
-            st.markdown(f"**Recomendacao:** {recomendacao}")
-        else:
-            st.caption("Clique em 'Gerar análise IA' para ver o resumo e recomendação.")
+            with st.expander(f"{emoji} [{row['classificacao']}] {row['titulo']} — {row['plataforma']}"):
+                chave = f"ia_{idx}"
+                if chave in st.session_state.analises:
+                    resumo, recomendacao = st.session_state.analises[chave]
+                    st.markdown(f"**Resumo:** {resumo}")
+                    st.markdown(f"**Recomendacao:** {recomendacao}")
+                else:
+                    if st.button("Gerar análise IA", key=chave):
+                        with st.spinner("Gerando análise..."):
+                            resumo, recomendacao = gerar_analise_ia(row.to_dict())
+                            st.session_state.analises[chave] = (resumo, recomendacao)
+                            st.rerun()
+                    else:
+                        st.caption("Clique em 'Gerar análise IA' para ver resumo e recomendação.")
 
 # ── ABA 2 — ANÁLISE POR TEMA ──────────────────────────────────
 with aba2:
@@ -316,16 +321,32 @@ with aba2:
                 root = ET.fromstring(resposta.content)
                 trends = [item.find("title").text for item in root.findall(".//item")]
                 encontrado = any(tema.lower() in t.lower() for t in trends)
-                dados_plataformas["Google Trends"] = {"encontrado": encontrado, "volume": 1 if encontrado else 0, "detalhe": "Em alta no Google Trends agora" if encontrado else "Fora do top 10 do Google Trends hoje"}
+                dados_plataformas["Google Trends"] = {
+                    "encontrado": encontrado,
+                    "volume": 1 if encontrado else 0,
+                    "detalhe": "Em alta no Google Trends agora" if encontrado else "Fora do top 10 do Google Trends hoje"
+                }
             except:
                 dados_plataformas["Google Trends"] = {"encontrado": False, "volume": 0, "detalhe": "Erro ao buscar"}
 
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(part="snippet", q=tema, type="video", order="viewCount", regionCode="BR", maxResults=10).execute()
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=tema,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=10
+                ).execute()
                 videos = resposta_yt.get("items", [])
-                dados_plataformas["YouTube"] = {"encontrado": len(videos) > 0, "volume": len(videos), "detalhe": f"{len(videos)} vídeos encontrados", "itens": [v["snippet"]["title"] for v in videos[:5]]}
+                dados_plataformas["YouTube"] = {
+                    "encontrado": len(videos) > 0,
+                    "volume": len(videos),
+                    "detalhe": f"{len(videos)} vídeos encontrados",
+                    "itens": [v["snippet"]["title"] for v in videos[:5]]
+                }
             except Exception as e:
                 dados_plataformas["YouTube"] = {"encontrado": False, "volume": 0, "detalhe": f"Erro: {e}"}
 
@@ -374,13 +395,7 @@ with aba2:
                 except Exception as e:
                     resumo_ia = f"Erro IA: {e}"
 
-            crescimento_pct = 0
-            # Previsão simplificada sem Prophet
-            try:
-                    valor_base = max(volume_total * 1000, 100)
-                    crescimento_pct = round(np.random.uniform(20, 60), 1) if plataformas_ativas > 0 else 0
-            except:
-                    crescimento_pct = 0
+            crescimento_pct = round(np.random.uniform(20, 60), 1) if plataformas_ativas > 0 else 0
 
         st.markdown("---")
         st.markdown(f"# {emoji_pmg} Hot Topics: **{tema}**")
@@ -400,22 +415,22 @@ with aba2:
         with col2:
             st.markdown("### Pesquisar nas Plataformas")
             for plataforma, link in links.items():
-                st.markdown(f"[🔍 Ver **{plataforma}**]({link})")
+                st.markdown(f"[Ver **{plataforma}**]({link})")
 
         st.markdown("---")
         col3, col4 = st.columns(2)
         with col3:
             st.markdown("### Resumo e Contexto")
             st.markdown(resumo_ia)
-            st.markdown("### Recomendação de Marca")
+            st.markdown("### Recomendacao de Marca")
             st.markdown(recomendacao_ia)
         with col4:
             sentimento_emoji = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento_ia, "😐")
             tendencia_emoji = {"MELHORANDO": "📈", "PIORANDO": "📉", "ESTAVEL": "➡️"}.get(tendencia_ia, "➡️")
-            st.markdown("### Sentimento e Tendência")
+            st.markdown("### Sentimento e Tendencia")
             st.markdown(f"**Sentimento atual:** {sentimento_emoji} {sentimento_ia}")
-            st.markdown(f"**Tendência:** {tendencia_emoji} {tendencia_ia}")
-            st.markdown("### Previsão de Crescimento (7 dias)")
+            st.markdown(f"**Tendencia:** {tendencia_emoji} {tendencia_ia}")
+            st.markdown("### Previsao de Crescimento (7 dias)")
             seta = "📈" if crescimento_pct > 0 else "📉"
             st.markdown(f"{seta} **{crescimento_pct:+.1f}%** *(dados simulados)*")
             st.markdown("### Principais Termos e Hashtags")
