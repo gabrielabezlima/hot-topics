@@ -2,7 +2,6 @@ streamlit
 anthropic
 google-api-python-client
 requests
-prophet
 numpy
 pandas
 praw
