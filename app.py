@@ -217,15 +217,10 @@ def rodar_pipeline():
 
     for t in todos:
         t["classificacao"] = classificar_pmg(t)
+        t["resumo"] = ""
+        t["recomendacao_marca"] = ""
 
-    topicos_enriquecidos = []
-    for t in todos:
-        resumo = gerar_resumo(t, client)
-        recomendacao = gerar_recomendacao(t, client)
-        topicos_enriquecidos.append({**t, "resumo": resumo, "recomendacao_marca": recomendacao})
-        time.sleep(0.5)
-
-    return topicos_enriquecidos
+    return todos
 
 # ════════════════════════════════════════════════════════════
 # INTERFACE
@@ -283,9 +278,15 @@ with aba1:
 
         for _, row in df_filtrado.iterrows():
             emoji = {"P": "🌱", "M": "📈", "G": "🔥"}[row["classificacao"]]
-            with st.expander(f"{emoji} [{row['classificacao']}] {row['titulo']} — {row['plataforma']}"):
-                st.markdown(f"**Resumo:** {row['resumo']}")
-                st.markdown(f"**Recomendacao:** {row['recomendacao_marca']}")
+    with st.expander(f"{emoji} [{row['classificacao']}] {row['titulo']} — {row['plataforma']}"):
+        if st.button(f"Gerar análise IA", key=row['titulo']):
+            with st.spinner("Gerando análise..."):
+                resumo = gerar_resumo(row.to_dict(), client)
+                recomendacao = gerar_recomendacao(row.to_dict(), client)
+            st.markdown(f"**Resumo:** {resumo}")
+            st.markdown(f"**Recomendacao:** {recomendacao}")
+        else:
+            st.caption("Clique em 'Gerar análise IA' para ver o resumo e recomendação.")
 
 # ── ABA 2 — ANÁLISE POR TEMA ──────────────────────────────────
 with aba2:
