@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import anthropic
 import time
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Hot Topics Dashboard", layout="wide")
 
@@ -180,7 +180,6 @@ def classificar_pmg(topico):
     return "P"
 
 def buscar_contexto_google_news(titulo):
-    """Busca notícias reais sobre o tópico para contextualizar a análise."""
     try:
         query = titulo.replace(" ", "+")
         url = f"https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
@@ -205,11 +204,9 @@ def gerar_analise_ia(topico):
         titulo = topico["titulo"]
         metrica = topico.get("metrica_principal", 0)
 
-        # Busca contexto real via Google News
         noticias = buscar_contexto_google_news(titulo)
         contexto_noticias = "\n".join([f"- {n}" for n in noticias]) if noticias else "Nenhuma notícia encontrada."
 
-        # Monta contexto específico por plataforma
         if plataforma == "youtube":
             contexto_plataforma = f"Este tópico está em alta no YouTube com {metrica:,} visualizações."
         elif plataforma == "google_trends":
@@ -272,6 +269,7 @@ Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou mark
         return resp_resumo.content[0].text, resp_rec.content[0].text
     except Exception as e:
         return f"Erro: {e}", f"Erro: {e}"
+
 # ════════════════════════════════════════════════════════════
 # PIPELINE AUTOMÁTICO — atualiza a cada 1 hora
 # ════════════════════════════════════════════════════════════
@@ -303,7 +301,8 @@ with aba1:
     with st.spinner("Coletando dados em tempo real..."):
         dados = rodar_pipeline()
 
-    hora_atualizacao = datetime.now().strftime("%d/%m/%Y às %H:%M")
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    hora_atualizacao = datetime.now(fuso_brasilia).strftime("%d/%m/%Y às %H:%M")
     st.success(f"✅ {len(dados)} tópicos monitorados — atualizado em {hora_atualizacao} (renova a cada 1h)")
     st.markdown("---")
 
@@ -362,6 +361,8 @@ with aba1:
                             st.rerun()
                     else:
                         st.caption("Clique em 'Gerar análise IA' para ver resumo e recomendação.")
+    else:
+        st.warning("Nenhum tópico encontrado. Verifique as chaves de API nos Secrets.")
 
 # ── ABA 2 — ANÁLISE POR TEMA ──────────────────────────────────
 with aba2:
@@ -426,7 +427,7 @@ with aba2:
             classificacao = "P"
             if client:
                 try:
-                    hoje = datetime.now().strftime("%d/%m/%Y")
+                    hoje = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
                     resp_pmg = client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=50,
@@ -444,24 +445,72 @@ with aba2:
             resumo_ia = recomendacao_ia = sentimento_ia = tendencia_ia = hashtags_ia = ""
             if client:
                 try:
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=250, messages=[{"role": "user", "content": f"""Analista de social listening. Resumo sobre "{tema}" nas redes sociais brasileiras. Máximo 3 frases em português."""}])
+                    # Busca contexto real do Google News para o tema
+                    noticias_tema = buscar_contexto_google_news(tema)
+                    contexto_noticias_tema = "\n".join([f"- {n}" for n in noticias_tema]) if noticias_tema else "Nenhuma notícia encontrada."
+
+                    # Videos encontrados no YouTube
+                    contexto_youtube = ""
+                    if dados_plataformas.get("YouTube", {}).get("itens"):
+                        videos_str = "\n".join([f"- {v}" for v in dados_plataformas["YouTube"]["itens"]])
+                        contexto_youtube = f"\nVídeos em alta no YouTube sobre esse tema:\n{videos_str}"
+
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+
+Analise o tema "{tema}" que está {classificacao_texto} nas redes sociais brasileiras.
+
+Notícias e menções reais encontradas agora:
+{contexto_noticias_tema}
+{contexto_youtube}
+
+Com base nesses dados reais, escreva uma análise em 3 frases que explique:
+1. O que está acontecendo de fato com esse tema agora
+2. Por que ele está ganhando atenção neste momento específico
+3. Qual é o perfil do público que está consumindo esse conteúdo
+
+Seja específico. Não invente contexto. Se não houver informação suficiente, diga claramente."""}]
+                    )
                     resumo_ia = resp.content[0].text
                     time.sleep(0.5)
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=250, messages=[{"role": "user", "content": f"""Estrategista de marketing. Para "{tema}" classificado como {classificacao_texto}, recomende ENTRAR, OBSERVAR ou EVITAR com justificativa e formato de conteúdo."""}])
+
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+
+Tema: "{tema}"
+Estágio: {classificacao_texto}
+
+Notícias e menções reais:
+{contexto_noticias_tema}
+{contexto_youtube}
+
+Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou markdown:
+1. Se a marca deve ENTRAR, OBSERVAR ou EVITAR — com justificativa baseada nos dados reais
+2. Qual o risco ou oportunidade específica desse momento
+3. Se ENTRAR, qual formato de conteúdo e em qual plataforma, com timing específico"""}]
+                    )
                     recomendacao_ia = resp.content[0].text
                     time.sleep(0.5)
+
                     resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f"""Sentimento público sobre "{tema}". Responda APENAS: POSITIVO, NEGATIVO ou NEUTRO."""}])
                     sentimento_ia = resp.content[0].text.strip().upper()
                     if sentimento_ia not in ["POSITIVO", "NEGATIVO", "NEUTRO"]:
                         sentimento_ia = "NEUTRO"
                     time.sleep(0.5)
+
                     resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f"""Tendência para "{tema}" com sentimento {sentimento_ia}. Responda APENAS: MELHORANDO, PIORANDO ou ESTAVEL."""}])
                     tendencia_ia = resp.content[0].text.strip().upper()
                     if tendencia_ia not in ["MELHORANDO", "PIORANDO", "ESTAVEL"]:
                         tendencia_ia = "ESTAVEL"
                     time.sleep(0.5)
+
                     resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=150, messages=[{"role": "user", "content": f"""Liste 8 hashtags e termos-chave sobre "{tema}" para redes sociais brasileiras. Formato: #hashtag1, #hashtag2, termo1..."""}])
                     hashtags_ia = resp.content[0].text
+
                 except Exception as e:
                     resumo_ia = f"Erro IA: {e}"
 
