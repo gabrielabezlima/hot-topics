@@ -294,7 +294,7 @@ def rodar_pipeline():
 st.title("🔥 Hot Topics — Painel de Tendências")
 st.caption("Monitoramento automatizado de tópicos em alta nas redes sociais")
 
-aba1, aba2, aba3 = st.tabs(["📋 Painel Geral", "🔍 Análise por Tema", "🎯 Território de Marca"])
+aba1, aba2, aba3, aba4 = st.tabs(["📋 Painel Geral", "🔍 Análise por Tema", "🎯 Território de Marca", "🏷️ Radar de Categoria"])
 
 # ── ABA 1 — PAINEL GERAL ─────────────────────────────────────
 with aba1:
@@ -784,3 +784,218 @@ Exemplo:
         with col5:
             st.markdown(f"[🔍 X/Twitter](<https://x.com/search?q={territorio_url}>)")
             st.markdown(f"[🔍 Reddit](<https://www.reddit.com/search/?q={territorio_url}>)")
+            
+            # ── ABA 4 — RADAR DE CATEGORIA ────────────────────────────────
+with aba4:
+    st.subheader("🏷️ Radar de Categoria")
+    st.caption("Digite uma categoria de mercado para ver o que está em alta e quais marcas estão em destaque.")
+
+    categoria = st.text_input("Digite a categoria:", placeholder="Ex: Cerveja, Smartphones, Cosméticos, Streaming...")
+
+    if st.button("🏷️ Analisar categoria") and categoria:
+        categoria_url = categoria.replace(" ", "+")
+
+        with st.spinner(f"Analisando categoria '{categoria}'..."):
+
+            # ── Coleta dados da categoria ─────────────────────
+            videos_categoria = []
+            try:
+                from googleapiclient.discovery import build
+                youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=categoria,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=15
+                ).execute()
+                for v in resposta_yt.get("items", []):
+                    videos_categoria.append({
+                        "titulo": v["snippet"]["title"],
+                        "canal": v["snippet"]["channelTitle"],
+                        "descricao": v["snippet"].get("description", "")[:200]
+                    })
+            except:
+                pass
+
+            # Notícias da categoria
+            noticias_categoria = buscar_contexto_google_news(categoria)
+            contexto_noticias_cat = "\n".join([f"- {n}" for n in noticias_categoria]) if noticias_categoria else "Nenhuma notícia encontrada."
+
+            # Contexto dos vídeos
+            contexto_videos_cat = "\n".join([f"- {v['titulo']} (canal: {v['canal']})" for v in videos_categoria[:10]]) if videos_categoria else "Nenhum vídeo encontrado."
+
+            # ── IA: Análise da categoria ──────────────────────
+            analise_categoria = ""
+            marcas_destaque = ""
+            oportunidade_categoria = ""
+            temas_categoria = ""
+
+            if client:
+                try:
+                    # Análise geral
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=400,
+                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+
+Categoria analisada: "{categoria}"
+
+Vídeos em alta no YouTube sobre essa categoria agora:
+{contexto_videos_cat}
+
+Notícias recentes:
+{contexto_noticias_cat}
+
+Escreva uma análise em 4 frases sobre:
+1. O que está acontecendo nessa categoria agora
+2. Qual subtema ou produto específico está dominando a conversa
+3. Qual é o perfil do consumidor engajado nessa categoria
+4. Se a categoria está aquecendo, no pico ou esfriando"""}]
+                    )
+                    analise_categoria = resp.content[0].text
+                    time.sleep(0.5)
+
+                    # Marcas em destaque
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=400,
+                        messages=[{"role": "user", "content": f"""Você é um analista de social listening.
+
+Categoria: "{categoria}"
+
+Conteúdos em alta encontrados:
+{contexto_videos_cat}
+
+Notícias:
+{contexto_noticias_cat}
+
+Identifique as marcas que aparecem em destaque nessa categoria agora.
+Para cada marca encontrada, informe em uma linha:
+- Nome da marca
+- Por que está em destaque (uma frase curta)
+- Sentimento: POSITIVO, NEGATIVO ou NEUTRO
+
+Formato por linha: MARCA | MOTIVO | SENTIMENTO
+Se não encontrar marcas específicas, diga claramente."""}]
+                    )
+                    marcas_destaque = resp.content[0].text
+                    time.sleep(0.5)
+
+                    # Oportunidade
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+
+Categoria: "{categoria}"
+
+Conteúdos em alta:
+{contexto_videos_cat}
+
+Notícias:
+{contexto_noticias_cat}
+
+Em 3 frases diretas, sem títulos ou markdown:
+1. Qual é a maior oportunidade para uma marca nessa categoria agora
+2. Qual formato de conteúdo e plataforma aproveitar
+3. O que evitar para não parecer genérico ou oportunista"""}]
+                    )
+                    oportunidade_categoria = resp.content[0].text
+                    time.sleep(0.5)
+
+                    # Temas em alta na categoria
+                    resp = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": f"""Analista de social listening.
+
+Categoria: "{categoria}"
+
+Conteúdos em alta:
+{contexto_videos_cat}
+
+Liste 8 temas específicos em alta dentro da categoria "{categoria}" agora.
+Formato: um tema por linha com emoji relevante, sem numeração."""}]
+                    )
+                    temas_categoria = resp.content[0].text.strip().split("\n")
+                    temas_categoria = [t.strip() for t in temas_categoria if t.strip()]
+
+                except Exception as e:
+                    analise_categoria = f"Erro: {e}"
+
+        # ── EXIBIR RESULTADOS ─────────────────────────────────
+        st.markdown("---")
+        st.markdown(f"# 🏷️ Categoria: **{categoria}**")
+        st.markdown("---")
+
+        # Análise + Oportunidade
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 📊 O que está acontecendo nessa categoria")
+            st.markdown(analise_categoria if analise_categoria else "Não foi possível gerar análise.")
+        with col2:
+            st.markdown("### 💡 Oportunidade para marcas")
+            st.markdown(oportunidade_categoria if oportunidade_categoria else "Não foi possível gerar oportunidade.")
+
+        st.markdown("---")
+
+        # Marcas em destaque
+        st.markdown("### 🏆 Marcas em destaque na categoria")
+        if marcas_destaque and "não encontr" not in marcas_destaque.lower():
+            linhas = [l.strip() for l in marcas_destaque.split("\n") if l.strip() and "|" in l]
+            if linhas:
+                for linha in linhas:
+                    partes = [p.strip() for p in linha.split("|")]
+                    if len(partes) >= 5:
+                        marca, acontecendo, plataforma, sentimento, recomendacao = partes[0], partes[1], partes[2], partes[3], partes[4]
+                        emoji_sent = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento.strip().upper(), "😐")
+                        with st.expander(f"**{marca}** {emoji_sent} {sentimento.strip()}"):
+                            st.markdown(f"**O que está acontecendo:** {acontecendo}")
+                            st.markdown(f"**Onde:** {plataforma}")
+                            st.markdown(f"**Para concorrentes:** {recomendacao}")
+                    elif len(partes) >= 3:
+                        marca, motivo, sentimento = partes[0], partes[1], partes[2]
+                        emoji_sent = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento.strip().upper(), "😐")
+                        st.markdown(f"**{marca}** {emoji_sent} — {motivo}")
+                    else:
+                        st.markdown(f"• {linha}")
+            else:
+                st.markdown(marcas_destaque)
+        else:
+            st.info("Nenhuma marca específica identificada nos conteúdos encontrados.")
+
+        # Top vídeos da categoria
+        st.markdown("### 🎬 Top conteúdos em alta na categoria")
+        for i, v in enumerate(videos_categoria[:10], 1):
+            st.markdown(f"**{i}.** {v['titulo']} — *{v['canal']}*")
+
+        st.markdown("---")
+
+        # Temas em alta
+        st.markdown("### 📋 Temas em alta dentro da categoria")
+        if temas_categoria:
+            col3, col4 = st.columns(2)
+            metade = len(temas_categoria) // 2
+            with col3:
+                for t in temas_categoria[:metade]:
+                    st.markdown(f"- {t}")
+            with col4:
+                for t in temas_categoria[metade:]:
+                    st.markdown(f"- {t}")
+
+        st.markdown("---")
+
+        # Links de pesquisa
+        st.markdown("### 🔗 Pesquisar na categoria")
+        col5, col6, col7 = st.columns(3)
+        with col5:
+            st.markdown(f"[🔍 YouTube](https://www.youtube.com/results?search_query={categoria_url})")
+            st.markdown(f"[🔍 Google](https://www.google.com/search?q={categoria_url})")
+        with col6:
+            st.markdown(f"[🔍 TikTok](https://www.tiktok.com/search?q={categoria_url})")
+            st.markdown(f"[🔍 Instagram](https://www.instagram.com/explore/tags/{categoria_url}/)")
+        with col7:
+            st.markdown(f"[🔍 X/Twitter](https://x.com/search?q={categoria_url})")
+            st.markdown(f"[🔍 Reddit](https://www.reddit.com/search/?q={categoria_url})")
