@@ -294,7 +294,7 @@ def rodar_pipeline():
 st.title("🔥 Hot Topics — Painel de Tendências")
 st.caption("Monitoramento automatizado de tópicos em alta nas redes sociais")
 
-aba1, aba2 = st.tabs(["📋 Painel Geral", "🔍 Análise por Tema"])
+aba1, aba2, aba3 = st.tabs(["📋 Painel Geral", "🔍 Análise por Tema", "🎯 Território de Marca"])
 
 # ── ABA 1 — PAINEL GERAL ─────────────────────────────────────
 with aba1:
@@ -554,3 +554,233 @@ Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou mark
             st.markdown(f"{seta} **{crescimento_pct:+.1f}%** *(dados simulados)*")
             st.markdown("### Principais Termos e Hashtags")
             st.markdown(hashtags_ia)
+            
+            # ── ABA 3 — TERRITÓRIO DE MARCA ───────────────────────────────
+with aba3:
+    st.subheader("🎯 Hot Topics por Território de Marca")
+    st.caption("Digite o território de marca para descobrir os assuntos mais quentes dentro dele.")
+
+    territorio = st.text_input("Digite o território:", placeholder="Ex: Futebol, Beleza, Tecnologia, Sustentabilidade...")
+
+    if st.button("🎯 Analisar território") and territorio:
+        territorio_url = territorio.replace(" ", "+")
+
+        with st.spinner(f"Buscando top 10 assuntos em '{territorio}'..."):
+
+            # ── SEÇÃO 1: Busca ativa no território ───────────────
+            topicos_territorio = []
+
+            # YouTube — busca vídeos do território
+            try:
+                from googleapiclient.discovery import build
+                youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=territorio,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=10
+                ).execute()
+                videos = resposta_yt.get("items", [])
+                for v in videos:
+                    topicos_territorio.append({
+                        "titulo": v["snippet"]["title"],
+                        "canal": v["snippet"]["channelTitle"],
+                        "plataforma": "YouTube",
+                        "fonte": "busca_ativa"
+                    })
+            except:
+                pass
+
+            # Google Trends — verifica se território está em alta
+            topicos_trends_relacionados = []
+            try:
+                url = "https://trends.google.com/trending/rss?geo=BR"
+                headers = {"User-Agent": "Mozilla/5.0"}
+                resposta = requests.get(url, headers=headers, timeout=10)
+                root = ET.fromstring(resposta.content)
+                trends = [item.find("title").text for item in root.findall(".//item")]
+                for t in trends:
+                    topicos_trends_relacionados.append(t)
+            except:
+                pass
+
+            # ── SEÇÃO 2: Filtro inteligente via IA ───────────────
+            topicos_painel_relacionados = []
+            if client and dados:
+                try:
+                    titulos_painel = [t["titulo"] for t in dados[:20]]
+                    lista_titulos = "\n".join([f"- {t}" for t in titulos_painel])
+
+                    resp_filtro = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=500,
+                        messages=[{"role": "user", "content": f"""Você é um analista de social listening.
+
+Território de marca: "{territorio}"
+
+Lista de tópicos em alta nas redes sociais agora:
+{lista_titulos}
+
+Identifique quais tópicos dessa lista têm relação direta ou indireta com o território "{territorio}".
+Responda APENAS com os títulos relacionados, um por linha, sem numeração ou explicação.
+Se nenhum tiver relação, responda: NENHUM"""}]
+                    )
+                    resultado = resp_filtro.content[0].text.strip()
+                    if resultado != "NENHUM":
+                        topicos_painel_relacionados = [t.strip() for t in resultado.split("\n") if t.strip()]
+                except:
+                    pass
+
+            # ── Gera análise geral do território via IA ───────────
+            analise_territorio = ""
+            oportunidade_territorio = ""
+            if client:
+                try:
+                    noticias_territorio = buscar_contexto_google_news(territorio)
+                    contexto_noticias = "\n".join([f"- {n}" for n in noticias_territorio]) if noticias_territorio else "Nenhuma notícia encontrada."
+                    top_videos_str = "\n".join([f"- {t['titulo']} ({t['canal']})" for t in topicos_territorio[:5]])
+
+                    resp_analise = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=400,
+                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+
+Território de marca analisado: "{territorio}"
+
+Top vídeos em alta no YouTube dentro desse território agora:
+{top_videos_str}
+
+Notícias recentes relacionadas:
+{contexto_noticias}
+
+Escreva uma análise em 4 frases sobre:
+1. O que está acontecendo agora dentro desse território
+2. Qual subtema específico está dominando a conversa
+3. Qual é o perfil do público engajado nesse território agora
+4. Qual é o momento atual do território (aquecendo, no pico, esfriando)"""}]
+                    )
+                    analise_territorio = resp_analise.content[0].text
+                    time.sleep(0.5)
+
+                    resp_oportunidade = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+
+Território de marca: "{territorio}"
+
+Top assuntos em alta dentro desse território agora:
+{top_videos_str}
+
+Notícias recentes:
+{contexto_noticias}
+
+Em 3 frases diretas, sem títulos ou markdown:
+1. Qual é a maior oportunidade de marca dentro desse território agora
+2. Qual formato de conteúdo e plataforma aproveitar nesse momento
+3. O que evitar para não parecer oportunista ou fora de contexto"""}]
+                    )
+                    oportunidade_territorio = resp_oportunidade.content[0].text
+                except:
+                    pass
+
+        # ── EXIBIR RESULTADOS ─────────────────────────────────
+        st.markdown("---")
+        st.markdown(f"# 🎯 Território: **{territorio}**")
+        st.markdown("---")
+
+        # Análise geral
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 📊 O que está acontecendo nesse território")
+            st.markdown(analise_territorio if analise_territorio else "Não foi possível gerar análise.")
+        with col2:
+            st.markdown("### 💡 Oportunidade para marcas")
+            st.markdown(oportunidade_territorio if oportunidade_territorio else "Não foi possível gerar oportunidade.")
+
+        st.markdown("---")
+
+        # Top 10 do território
+        st.markdown("### 🔥 Top 10 assuntos em alta no território")
+        if topicos_territorio:
+            for i, t in enumerate(topicos_territorio[:10], 1):
+                st.markdown(f"**{i}.** {t['titulo']} — *{t['canal']}* ({t['plataforma']})")
+        else:
+            st.warning("Nenhum assunto encontrado para esse território.")
+
+        st.markdown("---")
+
+        # Tópicos do painel relacionados
+        st.markdown("### 🔗 Tópicos do painel geral relacionados ao território")
+        if topicos_painel_relacionados:
+            for t in topicos_painel_relacionados:
+                # Busca classificação do tópico no painel
+                topico_completo = next((x for x in dados if x["titulo"] == t), None)
+                if topico_completo:
+                    emoji = {"P": "🌱", "M": "📈", "G": "🔥"}[topico_completo["classificacao"]]
+                    st.markdown(f"{emoji} [{topico_completo['classificacao']}] {t} — *{topico_completo['plataforma']}*")
+                else:
+                    st.markdown(f"• {t}")
+        else:
+            st.info("Nenhum tópico do painel geral foi relacionado a esse território.")
+
+
+# Lista de temas recomendados dentro do território
+        st.markdown("---")
+        st.markdown("### 📋 Temas recomendados para explorar nesse território")
+        
+        if client:
+            try:
+                top_videos_para_temas = "\n".join([f"- {t['titulo']}" for t in topicos_territorio[:10]])
+                
+                resp_temas = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=300,
+                    messages=[{"role": "user", "content": f"""Você é um analista de social listening de uma agência de publicidade brasileira.
+
+Território analisado: "{territorio}"
+
+Assuntos em alta dentro desse território agora:
+{top_videos_para_temas}
+
+Notícias recentes:
+{contexto_noticias}
+
+Com base nesses dados reais, liste 8 subtemas ou tópicos específicos que uma marca deveria monitorar dentro do território "{territorio}" agora.
+
+Formato: um tema por linha, começando com emoji relevante, sem numeração.
+Exemplo:
+⚽ Transferências de jogadores brasileiros
+🏆 Desempenho do Brasil nas eliminatórias"""}]
+                )
+                
+                temas_recomendados = resp_temas.content[0].text.strip().split("\n")
+                temas_recomendados = [t.strip() for t in temas_recomendados if t.strip()]
+                
+                col_temas1, col_temas2 = st.columns(2)
+                metade = len(temas_recomendados) // 2
+                
+                with col_temas1:
+                    for tema_rec in temas_recomendados[:metade]:
+                        st.markdown(f"- {tema_rec}")
+                with col_temas2:
+                    for tema_rec in temas_recomendados[metade:]:
+                        st.markdown(f"- {tema_rec}")
+                        
+            except:
+                st.info("Não foi possível gerar lista de temas recomendados.")
+        # Links de pesquisa
+        st.markdown("---")
+        st.markdown("### 🔗 Pesquisar no território")
+        col3, col4, col5 = st.columns(3)
+        with col3:
+            st.markdown(f"[🔍 YouTube](<https://www.youtube.com/results?search_query={territorio_url}>)")
+            st.markdown(f"[🔍 Google](<https://www.google.com/search?q={territorio_url}>)")
+        with col4:
+            st.markdown(f"[🔍 TikTok](<https://www.tiktok.com/search?q={territorio_url}>)")
+            st.markdown(f"[🔍 Instagram](<https://www.instagram.com/explore/tags/{territorio_url}/>)")
+        with col5:
+            st.markdown(f"[🔍 X/Twitter](<https://x.com/search?q={territorio_url}>)")
+            st.markdown(f"[🔍 Reddit](<https://www.reddit.com/search/?q={territorio_url}>)")
