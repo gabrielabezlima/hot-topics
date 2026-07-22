@@ -179,29 +179,99 @@ def classificar_pmg(topico):
         else: return "P"
     return "P"
 
+def buscar_contexto_google_news(titulo):
+    """Busca notícias reais sobre o tópico para contextualizar a análise."""
+    try:
+        query = titulo.replace(" ", "+")
+        url = f"https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resposta = requests.get(url, headers=headers, timeout=10)
+        root = ET.fromstring(resposta.content)
+        noticias = []
+        for item in root.findall(".//item")[:5]:
+            titulo_noticia = item.find("title")
+            if titulo_noticia is not None:
+                noticias.append(titulo_noticia.text)
+        return noticias
+    except:
+        return []
+
 def gerar_analise_ia(topico):
     if not client:
         return "IA não configurada.", "IA não configurada."
     try:
         classificacao_texto = {"P": "emergente", "M": "crescendo", "G": "mainstream"}[topico["classificacao"]]
-        
+        plataforma = topico["plataforma"]
+        titulo = topico["titulo"]
+        metrica = topico.get("metrica_principal", 0)
+
+        # Busca contexto real via Google News
+        noticias = buscar_contexto_google_news(titulo)
+        contexto_noticias = "\n".join([f"- {n}" for n in noticias]) if noticias else "Nenhuma notícia encontrada."
+
+        # Monta contexto específico por plataforma
+        if plataforma == "youtube":
+            contexto_plataforma = f"Este tópico está em alta no YouTube com {metrica:,} visualizações."
+        elif plataforma == "google_trends":
+            contexto_plataforma = "Este tópico está entre os mais buscados no Google Trends Brasil agora."
+        elif plataforma == "reddit":
+            contexto_plataforma = f"Este tópico tem {metrica:,} upvotes no Reddit."
+        elif plataforma == "instagram":
+            contexto_plataforma = f"Este tópico tem {metrica:,} likes no Instagram."
+        elif plataforma == "twitter":
+            contexto_plataforma = f"Este tópico tem {metrica:,} tweets no X/Twitter."
+        elif plataforma == "tiktok":
+            contexto_plataforma = f"Este tópico tem {metrica:,} visualizações no TikTok."
+        else:
+            contexto_plataforma = f"Este tópico está em alta na plataforma {plataforma}."
+
+        prompt_resumo = f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+
+Analise o tópico "{titulo}" que está {classificacao_texto} nas redes sociais brasileiras.
+
+Contexto da plataforma: {contexto_plataforma}
+
+Notícias e menções reais encontradas agora sobre esse tópico:
+{contexto_noticias}
+
+Com base nesses dados reais, escreva uma análise em 3 frases que explique:
+1. O que está acontecendo de fato com esse tópico agora
+2. Por que ele está ganhando atenção neste momento específico
+3. Qual é o perfil do público que está consumindo esse conteúdo
+
+Seja específico, use os dados reais fornecidos. Não invente contexto. Se não houver informação suficiente, diga claramente o que não foi possível identificar."""
+
+        prompt_recomendacao = f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+
+Tópico: "{titulo}"
+Estágio: {classificacao_texto}
+Plataforma de origem: {plataforma}
+Contexto: {contexto_plataforma}
+
+Notícias e menções reais:
+{contexto_noticias}
+
+Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou markdown:
+1. Se a marca deve ENTRAR, OBSERVAR ou EVITAR — com justificativa baseada nos dados reais
+2. Qual o risco ou oportunidade específica desse momento
+3. Se ENTRAR, qual formato de conteúdo e em qual plataforma, com timing específico"""
+
         resp_resumo = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=150,
-            messages=[{"role": "user", "content": f"""Analista de social listening. Resumo curto sobre "{topico['titulo']}" que está {classificacao_texto} nas redes sociais brasileiras. Máximo 2 frases em português."""}]
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt_resumo}]
         )
         time.sleep(0.3)
-        
+
         resp_rec = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=150,
-            messages=[{"role": "user", "content": f"""Estrategista de marketing. Para "{topico['titulo']}" classificado como {classificacao_texto}, recomende em 2 frases se uma marca deve ENTRAR, OBSERVAR ou EVITAR, com justificativa."""}]
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt_recomendacao}]
         )
-        
+
         return resp_resumo.content[0].text, resp_rec.content[0].text
     except Exception as e:
         return f"Erro: {e}", f"Erro: {e}"
-
 # ════════════════════════════════════════════════════════════
 # PIPELINE AUTOMÁTICO — atualiza a cada 1 hora
 # ════════════════════════════════════════════════════════════
