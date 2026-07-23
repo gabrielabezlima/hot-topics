@@ -6,10 +6,15 @@ import anthropic
 import time
 import numpy as np
 from datetime import datetime, timezone, timedelta
+import base64
+from pathlib import Path
 
-st.set_page_config(page_title="Hot Topics Dashboard", layout="wide")
+st.set_page_config(
+    page_title="ADAGA — Inteligência de Tendências",
+    page_icon="⚔️",
+    layout="wide"
+)
 
-# ── Chaves via Streamlit Secrets ──────────────────────────────
 YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
 ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")
 REDDIT_CLIENT_ID = st.secrets.get("REDDIT_CLIENT_ID", "")
@@ -19,6 +24,85 @@ TWITTER_BEARER_TOKEN = st.secrets.get("TWITTER_BEARER_TOKEN", "")
 TIKTOK_API_KEY = st.secrets.get("TIKTOK_API_KEY", "")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+fuso_brasilia = timezone(timedelta(hours=-3))
+
+def get_logo_base64():
+    for nome in ["logocerto2.png", "logocerto.png", "assets/logocerto.png", "assets/logocerto2.png"]:
+        try:
+            logo_path = Path(nome)
+            if logo_path.exists():
+                with open(logo_path, "rb") as f:
+                    return base64.b64encode(f.read()).decode()
+        except:
+            pass
+    return None
+
+logo_b64 = get_logo_base64()
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="height:240px; margin-bottom:0.5rem;">' if logo_b64 else '<div class="adaga-wordmark">A<span>D</span>AGA</div>'
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+.stApp { background-color: #08090B; }
+.stApp p, .stApp span, .stApp div, .stApp label, .stApp li { color: #F4F4F1; font-family: 'Inter', sans-serif; }
+.stMarkdown, .stMarkdown p { color: #F4F4F1 !important; }
+
+.adaga-header { border-bottom: 1px solid #B99A70; padding: 1.5rem 0; margin-bottom: 2rem; }
+.adaga-wordmark { font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 700; letter-spacing: 0.4em; color: #F4F4F1; }
+.adaga-wordmark span { color: #B99A70; }
+.adaga-tagline { font-size: 0.8rem; letter-spacing: 0.15em; color: #F4F4F1; text-transform: uppercase; margin-top: 0.3rem; }
+
+.metric-card { background: #17191D; border-radius: 8px; padding: 1.5rem; text-align: center; border: 1px solid #2A2D33; }
+.metric-number { font-family: 'Space Grotesk', sans-serif; font-size: 3rem; font-weight: 700; color: #F4F4F1; line-height: 1; margin: 0.5rem 0; }
+.metric-label { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: #F4F4F1; }
+.metric-p .metric-number { color: #6C9EFF; }
+.metric-m .metric-number { color: #B99A70; }
+.metric-g .metric-number { color: #F4F4F1; }
+
+.rank-item { display: flex; align-items: flex-start; padding: 0.8rem 0; border-bottom: 1px solid #17191D; gap: 1rem; }
+.rank-number { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; color: #F4F4F1; min-width: 2.5rem; }
+.rank-number-gold { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; color: #B99A70; min-width: 2.5rem; }
+.rank-title { font-size: 1rem; font-weight: 600; color: #F4F4F1; margin-bottom: 0.2rem; }
+.rank-meta { font-size: 0.75rem; color: #F4F4F1; }
+
+.badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.badge-p { background: #0D1F3C; color: #6C9EFF !important; }
+.badge-m { background: #2A1F0D; color: #B99A70 !important; }
+.badge-g { background: #2A2D33; color: #F4F4F1 !important; }
+
+.analise-card { background: #17191D; border: 1px solid #2A2D33; border-radius: 8px; padding: 1.2rem; margin: 0.5rem 0; }
+.analise-card-gold { background: #17191D; border: 1px solid #B99A70; border-radius: 8px; padding: 1.2rem; margin: 0.5rem 0; }
+.analise-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #B99A70; margin-bottom: 0.5rem; }
+.analise-text { font-size: 0.9rem; color: #F4F4F1; line-height: 1.6; }
+
+.section-title { font-family: 'Space Grotesk', sans-serif; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #B99A70; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #2A2D33; }
+.status-bar { background: #17191D; border: 1px solid #2A2D33; border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.75rem; color: #F4F4F1; letter-spacing: 0.05em; margin-bottom: 1.5rem; }
+
+.stTextInput > div > div > input { background: #F4F4F1 !important; border: 1px solid #B99A70 !important; color: #08090B !important; border-radius: 6px !important; font-family: 'Inter', sans-serif !important; }
+.stTextInput > div > div > input::placeholder { color: #555A61 !important; }
+.stSelectbox > div > div { background: #17191D !important; border: 1px solid #2A2D33 !important; color: #F4F4F1 !important; border-radius: 6px !important; }
+
+.stButton > button { background: #B99A70 !important; color: #08090B !important; border: none !important; border-radius: 6px !important; font-family: 'Space Grotesk', sans-serif !important; font-weight: 600 !important; letter-spacing: 0.05em !important; padding: 0.5rem 1.5rem !important; width: 100%; }
+.stButton > button:hover { background: #C9AA80 !important; }
+
+.stTabs [data-baseweb="tab-list"] { background: #08090B !important; border-bottom: 1px solid #2A2D33 !important; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: #F4F4F1 !important; font-family: 'Space Grotesk', sans-serif !important; font-size: 0.75rem !important; letter-spacing: 0.1em !important; text-transform: uppercase !important; padding: 0.8rem 1.2rem !important; }
+.stTabs [aria-selected="true"] { color: #F4F4F1 !important; border-bottom: 2px solid #B99A70 !important; }
+
+.streamlit-expanderHeader { background: #17191D !important; border: 1px solid #2A2D33 !important; color: #F4F4F1 !important; border-radius: 6px !important; }
+hr { border-color: #2A2D33 !important; margin: 1.5rem 0 !important; }
+.stSpinner > div { border-top-color: #B99A70 !important; }
+.gold { color: #B99A70 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="adaga-header">
+    {logo_html}
+    <div class="adaga-tagline">⚔ &nbsp; A inteligência que corta o ruído e revela tendências</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # FUNÇÕES DE COLETA
@@ -27,18 +111,12 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY els
 def coletar_google_trends(regiao="BR", max_resultados=10):
     try:
         url = f"https://trends.google.com/trending/rss?geo={regiao}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resposta = requests.get(url, headers=headers, timeout=10)
+        resposta = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         root = ET.fromstring(resposta.content)
         topicos = []
         for item in root.findall(".//item")[:max_resultados]:
             titulo = item.find("title").text
-            topicos.append({
-                "titulo": titulo,
-                "plataforma": "google_trends",
-                "metrica_principal": 0,
-                "metrica_secundaria": 0
-            })
+            topicos.append({"titulo": titulo, "plataforma": "google_trends", "metrica_principal": 0, "metrica_secundaria": 0})
         return topicos
     except:
         return []
@@ -49,20 +127,10 @@ def coletar_youtube(api_key, regiao="BR", max_resultados=10):
     try:
         from googleapiclient.discovery import build
         youtube = build("youtube", "v3", developerKey=api_key)
-        resposta = youtube.videos().list(
-            part="snippet,statistics",
-            chart="mostPopular",
-            regionCode=regiao,
-            maxResults=max_resultados
-        ).execute()
+        resposta = youtube.videos().list(part="snippet,statistics", chart="mostPopular", regionCode=regiao, maxResults=max_resultados).execute()
         topicos = []
         for video in resposta["items"]:
-            topicos.append({
-                "titulo": video["snippet"]["title"],
-                "plataforma": "youtube",
-                "metrica_principal": int(video["statistics"].get("viewCount", 0)),
-                "metrica_secundaria": int(video["statistics"].get("likeCount", 0))
-            })
+            topicos.append({"titulo": video["snippet"]["title"], "plataforma": "youtube", "metrica_principal": int(video["statistics"].get("viewCount", 0)), "metrica_secundaria": int(video["statistics"].get("likeCount", 0))})
         return topicos
     except:
         return []
@@ -72,21 +140,12 @@ def coletar_reddit(client_id, client_secret, max_resultados=10):
         return []
     try:
         import praw
-        reddit = praw.Reddit(
-            client_id=client_id,
-            client_secret=client_secret,
-            user_agent="HotTopics/1.0"
-        )
+        reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent="ADAGA/1.0")
         subreddits = ["brasil", "investimentos", "futebol", "tecnologia"]
         topicos = []
         for sub in subreddits:
             for post in reddit.subreddit(sub).hot(limit=max_resultados // len(subreddits)):
-                topicos.append({
-                    "titulo": post.title,
-                    "plataforma": "reddit",
-                    "metrica_principal": post.score,
-                    "metrica_secundaria": post.num_comments
-                })
+                topicos.append({"titulo": post.title, "plataforma": "reddit", "metrica_principal": post.score, "metrica_secundaria": post.num_comments})
         return topicos
     except:
         return []
@@ -95,21 +154,11 @@ def coletar_meta(access_token, max_resultados=10):
     if not access_token:
         return []
     try:
-        url = "https://graph.facebook.com/v22.0/me/media"
-        params = {
-            "fields": "id,caption,like_count,comments_count",
-            "limit": max_resultados,
-            "access_token": access_token
-        }
-        resposta = requests.get(url, params=params, timeout=10).json()
+        params = {"fields": "id,caption,like_count,comments_count", "limit": max_resultados, "access_token": access_token}
+        resposta = requests.get("https://graph.facebook.com/v22.0/me/media", params=params, timeout=10).json()
         topicos = []
         for post in resposta.get("data", []):
-            topicos.append({
-                "titulo": post.get("caption", "")[:100],
-                "plataforma": "instagram",
-                "metrica_principal": post.get("like_count", 0),
-                "metrica_secundaria": post.get("comments_count", 0)
-            })
+            topicos.append({"titulo": post.get("caption", "")[:100], "plataforma": "instagram", "metrica_principal": post.get("like_count", 0), "metrica_secundaria": post.get("comments_count", 0)})
         return topicos
     except:
         return []
@@ -119,16 +168,10 @@ def coletar_twitter(bearer_token, max_resultados=10):
         return []
     try:
         headers = {"Authorization": f"Bearer {bearer_token}"}
-        url = "https://api.twitter.com/1.1/trends/place.json"
-        resposta = requests.get(url, headers=headers, params={"id": 455189}, timeout=10).json()
+        resposta = requests.get("https://api.twitter.com/1.1/trends/place.json", headers=headers, params={"id": 455189}, timeout=10).json()
         topicos = []
         for trend in resposta[0]["trends"][:max_resultados]:
-            topicos.append({
-                "titulo": trend["name"],
-                "plataforma": "twitter",
-                "metrica_principal": trend.get("tweet_volume", 0) or 0,
-                "metrica_secundaria": 0
-            })
+            topicos.append({"titulo": trend["name"], "plataforma": "twitter", "metrica_principal": trend.get("tweet_volume", 0) or 0, "metrica_secundaria": 0})
         return topicos
     except:
         return []
@@ -138,16 +181,10 @@ def coletar_tiktok(api_key, max_resultados=10):
         return []
     try:
         headers = {"Authorization": f"Bearer {api_key}"}
-        url = "https://open.tiktokapis.com/v2/research/hashtag/query/"
-        resposta = requests.get(url, headers=headers, timeout=10).json()
+        resposta = requests.get("https://open.tiktokapis.com/v2/research/hashtag/query/", headers=headers, timeout=10).json()
         topicos = []
         for hashtag in resposta.get("data", {}).get("hashtags", [])[:max_resultados]:
-            topicos.append({
-                "titulo": f"#{hashtag.get('hashtag_name', '')}",
-                "plataforma": "tiktok",
-                "metrica_principal": hashtag.get("view_count", 0),
-                "metrica_secundaria": hashtag.get("video_count", 0)
-            })
+            topicos.append({"titulo": f"#{hashtag.get('hashtag_name', '')}", "plataforma": "tiktok", "metrica_principal": hashtag.get("view_count", 0), "metrica_secundaria": hashtag.get("video_count", 0)})
         return topicos
     except:
         return []
@@ -155,8 +192,7 @@ def coletar_tiktok(api_key, max_resultados=10):
 def classificar_pmg(topico):
     plataforma = topico["plataforma"]
     metrica = topico["metrica_principal"]
-    if plataforma == "google_trends":
-        return "P"
+    if plataforma == "google_trends": return "P"
     elif plataforma == "youtube":
         if metrica >= 5_000_000: return "G"
         elif metrica >= 500_000: return "M"
@@ -183,95 +219,64 @@ def buscar_contexto_google_news(titulo):
     try:
         query = titulo.replace(" ", "+")
         url = f"https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resposta = requests.get(url, headers=headers, timeout=10)
+        resposta = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         root = ET.fromstring(resposta.content)
         noticias = []
         for item in root.findall(".//item")[:5]:
-            titulo_noticia = item.find("title")
-            if titulo_noticia is not None:
-                noticias.append(titulo_noticia.text)
+            t = item.find("title")
+            if t is not None:
+                noticias.append(t.text)
         return noticias
     except:
         return []
 
 def gerar_analise_ia(topico):
     if not client:
-        return "IA não configurada.", "IA não configurada."
+        return None
     try:
         classificacao_texto = {"P": "emergente", "M": "crescendo", "G": "mainstream"}[topico["classificacao"]]
         plataforma = topico["plataforma"]
         titulo = topico["titulo"]
         metrica = topico.get("metrica_principal", 0)
-
         noticias = buscar_contexto_google_news(titulo)
         contexto_noticias = "\n".join([f"- {n}" for n in noticias]) if noticias else "Nenhuma notícia encontrada."
-
         if plataforma == "youtube":
-            contexto_plataforma = f"Este tópico está em alta no YouTube com {metrica:,} visualizações."
+            contexto_plataforma = f"Em alta no YouTube com {metrica:,} visualizações."
         elif plataforma == "google_trends":
-            contexto_plataforma = "Este tópico está entre os mais buscados no Google Trends Brasil agora."
-        elif plataforma == "reddit":
-            contexto_plataforma = f"Este tópico tem {metrica:,} upvotes no Reddit."
-        elif plataforma == "instagram":
-            contexto_plataforma = f"Este tópico tem {metrica:,} likes no Instagram."
-        elif plataforma == "twitter":
-            contexto_plataforma = f"Este tópico tem {metrica:,} tweets no X/Twitter."
-        elif plataforma == "tiktok":
-            contexto_plataforma = f"Este tópico tem {metrica:,} visualizações no TikTok."
+            contexto_plataforma = "Entre os mais buscados no Google Trends Brasil agora."
         else:
-            contexto_plataforma = f"Este tópico está em alta na plataforma {plataforma}."
-
-        prompt_resumo = f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
-
-Analise o tópico "{titulo}" que está {classificacao_texto} nas redes sociais brasileiras.
-
-Contexto da plataforma: {contexto_plataforma}
-
-Notícias e menções reais encontradas agora sobre esse tópico:
-{contexto_noticias}
-
-Com base nesses dados reais, escreva uma análise em 3 frases que explique:
-1. O que está acontecendo de fato com esse tópico agora
-2. Por que ele está ganhando atenção neste momento específico
-3. Qual é o perfil do público que está consumindo esse conteúdo
-
-Seja específico, use os dados reais fornecidos. Não invente contexto. Se não houver informação suficiente, diga claramente o que não foi possível identificar."""
-
-        prompt_recomendacao = f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
-
-Tópico: "{titulo}"
-Estágio: {classificacao_texto}
-Plataforma de origem: {plataforma}
-Contexto: {contexto_plataforma}
-
-Notícias e menções reais:
-{contexto_noticias}
-
-Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou markdown:
-1. Se a marca deve ENTRAR, OBSERVAR ou EVITAR — com justificativa baseada nos dados reais
-2. Qual o risco ou oportunidade específica desse momento
-3. Se ENTRAR, qual formato de conteúdo e em qual plataforma, com timing específico"""
+            contexto_plataforma = f"Em alta na plataforma {plataforma}."
 
         resp_resumo = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt_resumo}]
+            max_tokens=600,
+            messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tópico: "{titulo}" | {classificacao_texto} | {contexto_plataforma}
+Notícias: {contexto_noticias}
+
+3 blocos:
+CONTEXTO: [2 frases completas sobre o que está acontecendo]
+PÚBLICO: [2 frases completas sobre o perfil do público]
+SENTIMENTO: [POSITIVO/NEGATIVO/NEUTRO] — [1 frase sobre o tom]"""}]
         )
         time.sleep(0.3)
 
         resp_rec = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt_recomendacao}]
-        )
+            max_tokens=500,
+            messages=[{"role": "user", "content": f"""Estrategista de marketing. Tópico: "{titulo}" | {classificacao_texto} | {plataforma}
+Notícias: {contexto_noticias}
 
-        return resp_resumo.content[0].text, resp_rec.content[0].text
+3 blocos:
+DECISÃO: ENTRAR/OBSERVAR/EVITAR — [justificativa]
+OPORTUNIDADE: [risco ou oportunidade específica]
+FORMATO: [formato, plataforma e timing]"""}]
+        )
+        return {"resumo": resp_resumo.content[0].text, "recomendacao": resp_rec.content[0].text, "classificacao": topico["classificacao"]}
     except Exception as e:
-        return f"Erro: {e}", f"Erro: {e}"
+        return {"erro": str(e)}
 
 # ════════════════════════════════════════════════════════════
-# PIPELINE AUTOMÁTICO — atualiza a cada 1 hora
+# PIPELINE
 # ════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=3600)
@@ -291,23 +296,17 @@ def rodar_pipeline():
 # INTERFACE
 # ════════════════════════════════════════════════════════════
 
-st.title("🔥 Hot Topics — Painel de Tendências")
-st.caption("Monitoramento automatizado de tópicos em alta nas redes sociais")
+aba1, aba2, aba3, aba4 = st.tabs(["⚡ RADAR GERAL", "🔍 ANÁLISE POR TEMA", "🎯 TERRITÓRIO", "🏷️ CATEGORIA"])
 
-aba1, aba2, aba3, aba4 = st.tabs(["📋 Painel Geral", "🔍 Análise por Tema", "🎯 Território de Marca", "🏷️ Radar de Categoria"])
-
-# ── ABA 1 — PAINEL GERAL ─────────────────────────────────────
+# ── ABA 1 ──────────────────────────────────────────────────
 with aba1:
-    with st.spinner("Coletando dados em tempo real..."):
+    with st.spinner("Captando sinais..."):
         dados = rodar_pipeline()
 
-    fuso_brasilia = timezone(timedelta(hours=-3))
     hora_atualizacao = datetime.now(fuso_brasilia).strftime("%d/%m/%Y às %H:%M")
-    st.success(f"✅ {len(dados)} tópicos monitorados — atualizado em {hora_atualizacao} (renova a cada 1h)")
-    st.markdown("---")
+    st.markdown(f'<div class="status-bar">● MONITORAMENTO ATIVO &nbsp;·&nbsp; {len(dados)} SINAIS CAPTADOS &nbsp;·&nbsp; {hora_atualizacao} &nbsp;·&nbsp; RENOVA A CADA 1H</div>', unsafe_allow_html=True)
 
     df = pd.DataFrame(dados)
-
     if not df.empty:
         total_p = len(df[df["classificacao"] == "P"])
         total_m = len(df[df["classificacao"] == "M"])
@@ -315,26 +314,20 @@ with aba1:
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown("### 🌱 Emergentes (P)")
-            st.markdown(f"## **{total_p}**")
-            st.caption("tópicos identificados")
+            st.markdown(f'<div class="metric-card metric-p"><div class="metric-label">▲ EMERGENTES</div><div class="metric-number">{total_p}</div><div class="metric-label">sinais identificados</div></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown("### 📈 Crescendo (M)")
-            st.markdown(f"## **{total_m}**")
-            st.caption("tópicos em crescimento")
+            st.markdown(f'<div class="metric-card metric-m"><div class="metric-label">◆ CRESCENDO</div><div class="metric-number">{total_m}</div><div class="metric-label">em aceleração</div></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown("### 🔥 Mainstream (G)")
-            st.markdown(f"## **{total_g}**")
-            st.caption("tópico consolidado")
+            st.markdown(f'<div class="metric-card metric-g"><div class="metric-label">● MAINSTREAM</div><div class="metric-number">{total_g}</div><div class="metric-label">consolidado</div></div>', unsafe_allow_html=True)
 
-        st.markdown("---")
-        st.subheader("📋 Lista de Tópicos")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">⚡ Sinais em tempo real</div>', unsafe_allow_html=True)
 
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            filtro_pmg = st.selectbox("Filtrar por classificação:", ["Todos", "P - Emergente", "M - Crescendo", "G - Mainstream"])
+            filtro_pmg = st.selectbox("Classificação", ["Todos", "P — Emergente", "M — Crescendo", "G — Mainstream"])
         with col_f2:
-            filtro_plataforma = st.selectbox("Filtrar por plataforma:", ["Todas"] + sorted(df["plataforma"].unique().tolist()))
+            filtro_plataforma = st.selectbox("Plataforma", ["Todas"] + sorted(df["plataforma"].unique().tolist()))
 
         df_filtrado = df.copy()
         if filtro_pmg != "Todos":
@@ -345,33 +338,54 @@ with aba1:
         if "analises" not in st.session_state:
             st.session_state.analises = {}
 
+        label_map = {"P": "EMERGENTE", "M": "CRESCENDO", "G": "MAINSTREAM"}
+        plataforma_icon = {"google_trends": "🔍", "youtube": "▶", "reddit": "◎", "instagram": "◈", "twitter": "◉", "tiktok": "◐"}
+
         for idx, row in df_filtrado.iterrows():
-            emoji = {"P": "🌱", "M": "📈", "G": "🔥"}[row["classificacao"]]
-            with st.expander(f"{emoji} [{row['classificacao']}] {row['titulo']} — {row['plataforma']}"):
-                chave = f"ia_{idx}"
-                if chave in st.session_state.analises:
-                    resumo, recomendacao = st.session_state.analises[chave]
-                    st.markdown(f"**Resumo:** {resumo}")
-                    st.markdown(f"**Recomendacao:** {recomendacao}")
+            classificacao = row["classificacao"]
+            badge_class = f"badge-{classificacao.lower()}"
+            num_class = "rank-number-gold" if idx < 3 else "rank-number"
+            icon = plataforma_icon.get(row["plataforma"], "•")
+            metrica_txt = f" · {row['metrica_principal']:,} views" if row["metrica_principal"] > 0 and row["plataforma"] == "youtube" else ""
+
+            st.markdown(f"""
+            <div class="rank-item">
+                <div class="{num_class}">{idx+1:02d}</div>
+                <div style="flex:1">
+                    <div class="rank-title">{row['titulo']}</div>
+                    <div class="rank-meta">{icon} {row['plataforma'].upper()}{metrica_txt} &nbsp;<span class="badge {badge_class}">{label_map[classificacao]}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            chave = f"ia_{idx}"
+            if chave in st.session_state.analises:
+                analise = st.session_state.analises[chave]
+                if "erro" not in analise:
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.markdown(f'<div class="analise-card"><div class="analise-label">Análise</div><div class="analise-text">{analise["resumo"]}</div></div>', unsafe_allow_html=True)
+                    with col_b:
+                        st.markdown(f'<div class="analise-card-gold"><div class="analise-label">Recomendação</div><div class="analise-text">{analise["recomendacao"]}</div></div>', unsafe_allow_html=True)
                 else:
-                    if st.button("Gerar análise IA", key=chave):
-                        with st.spinner("Gerando análise..."):
-                            resumo, recomendacao = gerar_analise_ia(row.to_dict())
-                            st.session_state.analises[chave] = (resumo, recomendacao)
+                    st.error(f"Erro: {analise['erro']}")
+            else:
+                if st.button("⚔ Analisar", key=chave):
+                    with st.spinner("Processando sinal..."):
+                        analise = gerar_analise_ia(row.to_dict())
+                        if analise:
+                            st.session_state.analises[chave] = analise
                             st.rerun()
-                    else:
-                        st.caption("Clique em 'Gerar análise IA' para ver resumo e recomendação.")
     else:
-        st.warning("Nenhum tópico encontrado. Verifique as chaves de API nos Secrets.")
+        st.markdown('<div class="analise-card">Nenhum sinal captado. Verifique as chaves de API.</div>', unsafe_allow_html=True)
 
-# ── ABA 2 — ANÁLISE POR TEMA ──────────────────────────────────
+# ── ABA 2 ──────────────────────────────────────────────────
 with aba2:
-    st.subheader("🔍 Análise Completa por Tema")
-    st.caption("Digite um tema para gerar um Hot Topics segmentado completo.")
+    st.markdown('<div class="section-title">🔍 Análise por Tema</div>', unsafe_allow_html=True)
+    st.markdown('<p>Digite um tema para gerar inteligência completa sobre ele agora.</p>', unsafe_allow_html=True)
+    tema = st.text_input("", placeholder="Ex: inteligência artificial, black friday...", key="tema_input")
 
-    tema = st.text_input("Digite o tema:", placeholder="Ex: inteligência artificial, black friday...")
-
-    if st.button("🔍 Analisar tema") and tema:
+    if st.button("⚔ Analisar tema", key="btn_tema") and tema:
         tema_url = tema.replace(" ", "+")
         links = {
             "YouTube": f"https://www.youtube.com/results?search_query={tema_url}",
@@ -382,42 +396,25 @@ with aba2:
             "Reddit": f"https://www.reddit.com/search/?q={tema_url}"
         }
 
-        with st.spinner("Coletando dados e gerando análise completa..."):
+        with st.spinner("Captando sinais..."):
             dados_plataformas = {}
 
             try:
                 url = "https://trends.google.com/trending/rss?geo=BR"
-                headers = {"User-Agent": "Mozilla/5.0"}
-                resposta = requests.get(url, headers=headers, timeout=10)
+                resposta = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
                 root = ET.fromstring(resposta.content)
                 trends = [item.find("title").text for item in root.findall(".//item")]
                 encontrado = any(tema.lower() in t.lower() for t in trends)
-                dados_plataformas["Google Trends"] = {
-                    "encontrado": encontrado,
-                    "volume": 1 if encontrado else 0,
-                    "detalhe": "Em alta no Google Trends agora" if encontrado else "Fora do top 10 do Google Trends hoje"
-                }
+                dados_plataformas["Google Trends"] = {"encontrado": encontrado, "volume": 1 if encontrado else 0, "detalhe": "Em alta agora" if encontrado else "Fora do top 10"}
             except:
-                dados_plataformas["Google Trends"] = {"encontrado": False, "volume": 0, "detalhe": "Erro ao buscar"}
+                dados_plataformas["Google Trends"] = {"encontrado": False, "volume": 0, "detalhe": "Erro"}
 
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(
-                    part="snippet",
-                    q=tema,
-                    type="video",
-                    order="viewCount",
-                    regionCode="BR",
-                    maxResults=10
-                ).execute()
+                resposta_yt = youtube.search().list(part="snippet", q=tema, type="video", order="viewCount", regionCode="BR", maxResults=10).execute()
                 videos = resposta_yt.get("items", [])
-                dados_plataformas["YouTube"] = {
-                    "encontrado": len(videos) > 0,
-                    "volume": len(videos),
-                    "detalhe": f"{len(videos)} vídeos encontrados",
-                    "itens": [v["snippet"]["title"] for v in videos[:5]]
-                }
+                dados_plataformas["YouTube"] = {"encontrado": len(videos) > 0, "volume": len(videos), "detalhe": f"{len(videos)} vídeos encontrados", "itens": [v["snippet"]["title"] for v in videos[:5]]}
             except Exception as e:
                 dados_plataformas["YouTube"] = {"encontrado": False, "volume": 0, "detalhe": f"Erro: {e}"}
 
@@ -428,574 +425,413 @@ with aba2:
             if client:
                 try:
                     hoje = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
-                    resp_pmg = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=50,
-                        messages=[{"role": "user", "content": f"""Classifique o tema "{tema}" considerando: data de hoje: {hoje}, plataformas encontradas: {plataformas_ativas}, volume: {volume_total}. Considere sazonalidade e momentum. Responda APENAS: P, M ou G."""}]
-                    )
+                    resp_pmg = client.messages.create(model="claude-sonnet-4-6", max_tokens=50, messages=[{"role": "user", "content": f'Classifique "{tema}" considerando: data {hoje}, plataformas {plataformas_ativas}, volume {volume_total}. Responda APENAS: P, M ou G.'}])
                     classificacao = resp_pmg.content[0].text.strip().upper()
                     if classificacao not in ["P", "M", "G"]:
                         classificacao = "M" if plataformas_ativas >= 1 else "P"
                 except:
                     classificacao = "G" if plataformas_ativas >= 2 else "M" if plataformas_ativas == 1 else "P"
 
-            classificacao_mapa = {"P": ("🌱", "Emergente"), "M": ("📈", "Crescendo"), "G": ("🔥", "Mainstream")}
-            emoji_pmg, classificacao_texto = classificacao_mapa[classificacao]
+            classificacao_mapa = {"P": ("▲", "EMERGENTE", "#6C9EFF"), "M": ("◆", "CRESCENDO", "#B99A70"), "G": ("●", "MAINSTREAM", "#F4F4F1")}
+            simbolo_pmg, label_pmg, cor_pmg = classificacao_mapa[classificacao]
 
             resumo_ia = recomendacao_ia = sentimento_ia = tendencia_ia = hashtags_ia = ""
             if client:
                 try:
-                    # Busca contexto real do Google News para o tema
                     noticias_tema = buscar_contexto_google_news(tema)
-                    contexto_noticias_tema = "\n".join([f"- {n}" for n in noticias_tema]) if noticias_tema else "Nenhuma notícia encontrada."
-
-                    # Videos encontrados no YouTube
+                    contexto_noticias_tema = "\n".join([f"- {n}" for n in noticias_tema]) if noticias_tema else "Nenhuma notícia."
                     contexto_youtube = ""
                     if dados_plataformas.get("YouTube", {}).get("itens"):
                         videos_str = "\n".join([f"- {v}" for v in dados_plataformas["YouTube"]["itens"]])
-                        contexto_youtube = f"\nVídeos em alta no YouTube sobre esse tema:\n{videos_str}"
+                        contexto_youtube = f"\nVídeos em alta:\n{videos_str}"
 
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tema: "{tema}" ({label_pmg}).
+Notícias: {contexto_noticias_tema}{contexto_youtube}
 
-Analise o tema "{tema}" que está {classificacao_texto} nas redes sociais brasileiras.
+3 parágrafos completos:
+1. O que está acontecendo de fato agora
+2. Por que está ganhando atenção neste momento
+3. Perfil completo do público: faixa etária, interesses, comportamento, plataformas
 
-Notícias e menções reais encontradas agora:
-{contexto_noticias_tema}
-{contexto_youtube}
-
-Com base nesses dados reais, escreva uma análise em 3 frases que explique:
-1. O que está acontecendo de fato com esse tema agora
-2. Por que ele está ganhando atenção neste momento específico
-3. Qual é o perfil do público que está consumindo esse conteúdo
-
-Seja específico. Não invente contexto. Se não houver informação suficiente, diga claramente."""}]
-                    )
+Sem cortar."""}])
                     resumo_ia = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1200, messages=[{"role": "user", "content": f"""Estrategista de marketing. Tema: "{tema}" ({label_pmg}).
+Notícias: {contexto_noticias_tema}
 
-Tema: "{tema}"
-Estágio: {classificacao_texto}
+3 parágrafos completos:
+1. ENTRAR/OBSERVAR/EVITAR com justificativa completa
+2. Risco ou oportunidade específica detalhada
+3. Formato, plataforma e timing ideais
 
-Notícias e menções reais:
-{contexto_noticias_tema}
-{contexto_youtube}
-
-Com base nesses dados reais, recomende em 3 frases diretas, sem títulos ou markdown:
-1. Se a marca deve ENTRAR, OBSERVAR ou EVITAR — com justificativa baseada nos dados reais
-2. Qual o risco ou oportunidade específica desse momento
-3. Se ENTRAR, qual formato de conteúdo e em qual plataforma, com timing específico"""}]
-                    )
+Sem cortar."""}])
                     recomendacao_ia = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f"""Sentimento público sobre "{tema}". Responda APENAS: POSITIVO, NEGATIVO ou NEUTRO."""}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f'Sentimento sobre "{tema}". APENAS: POSITIVO, NEGATIVO ou NEUTRO.'}])
                     sentimento_ia = resp.content[0].text.strip().upper()
-                    if sentimento_ia not in ["POSITIVO", "NEGATIVO", "NEUTRO"]:
-                        sentimento_ia = "NEUTRO"
+                    if sentimento_ia not in ["POSITIVO", "NEGATIVO", "NEUTRO"]: sentimento_ia = "NEUTRO"
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f"""Tendência para "{tema}" com sentimento {sentimento_ia}. Responda APENAS: MELHORANDO, PIORANDO ou ESTAVEL."""}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f'Tendência para "{tema}" sentimento {sentimento_ia}. APENAS: MELHORANDO, PIORANDO ou ESTAVEL.'}])
                     tendencia_ia = resp.content[0].text.strip().upper()
-                    if tendencia_ia not in ["MELHORANDO", "PIORANDO", "ESTAVEL"]:
-                        tendencia_ia = "ESTAVEL"
+                    if tendencia_ia not in ["MELHORANDO", "PIORANDO", "ESTAVEL"]: tendencia_ia = "ESTAVEL"
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=150, messages=[{"role": "user", "content": f"""Liste 8 hashtags e termos-chave sobre "{tema}" para redes sociais brasileiras. Formato: #hashtag1, #hashtag2, termo1..."""}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=200, messages=[{"role": "user", "content": f'8 hashtags e termos sobre "{tema}" para redes sociais brasileiras. Formato: #hashtag1, #hashtag2, termo1...'}])
                     hashtags_ia = resp.content[0].text
-
                 except Exception as e:
-                    resumo_ia = f"Erro IA: {e}"
+                    resumo_ia = f"Erro: {e}"
 
             crescimento_pct = round(np.random.uniform(20, 60), 1) if plataformas_ativas > 0 else 0
 
         st.markdown("---")
-        st.markdown(f"# {emoji_pmg} Hot Topics: **{tema}**")
-        st.markdown(f"### Classificação: **{classificacao} — {classificacao_texto}**")
-        st.markdown("---")
+        st.markdown(f"""
+        <div style="margin-bottom:1.5rem;">
+            <div style="font-family:'Space Grotesk'; font-size:1.8rem; font-weight:700; color:{cor_pmg};">{simbolo_pmg} {tema.upper()}</div>
+            <div style="font-size:0.75rem; letter-spacing:0.15em; color:#F4F4F1; text-transform:uppercase;">{label_pmg} &nbsp;·&nbsp; {plataformas_ativas} PLATAFORMAS ATIVAS</div>
+        </div>
+        """, unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("### Presença nas Plataformas")
+            st.markdown('<div class="section-title">📡 Presença nas plataformas</div>', unsafe_allow_html=True)
             for plataforma, d in dados_plataformas.items():
-                icone = "✅" if d["encontrado"] else "❌"
-                st.markdown(f"{icone} **{plataforma}:** {d['detalhe']}")
+                cor = "#B99A70" if d["encontrado"] else "#F4F4F1"
+                icone = "▪" if d["encontrado"] else "▫"
+                st.markdown(f'<p style="color:{cor}; margin:0.3rem 0;">{icone} <b>{plataforma}</b> — {d["detalhe"]}</p>', unsafe_allow_html=True)
             if "itens" in dados_plataformas.get("YouTube", {}):
-                st.markdown("**Top vídeos:**")
+                st.markdown('<div class="section-title" style="margin-top:1rem;">Top vídeos</div>', unsafe_allow_html=True)
                 for v in dados_plataformas["YouTube"]["itens"]:
-                    st.caption(f"• {v}")
+                    st.markdown(f'<p style="margin:0.2rem 0; color:#F4F4F1;">▸ {v}</p>', unsafe_allow_html=True)
         with col2:
-            st.markdown("### Pesquisar nas Plataformas")
+            st.markdown('<div class="section-title">🔗 Pesquisar nas plataformas</div>', unsafe_allow_html=True)
             for plataforma, link in links.items():
-                st.markdown(f"[Ver **{plataforma}**]({link})")
+                st.markdown(f'<a href="{link}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.4rem 0;">⚔ {plataforma}</a>', unsafe_allow_html=True)
 
         st.markdown("---")
         col3, col4 = st.columns(2)
         with col3:
-            st.markdown("### Resumo e Contexto")
-            st.markdown(resumo_ia)
-            st.markdown("### Recomendacao de Marca")
-            st.markdown(recomendacao_ia)
+            st.markdown(f'<div class="analise-card"><div class="analise-label">Contexto e análise</div><div class="analise-text">{resumo_ia}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="analise-card-gold" style="margin-top:1rem;"><div class="analise-label">Recomendação de marca</div><div class="analise-text">{recomendacao_ia}</div></div>', unsafe_allow_html=True)
         with col4:
-            sentimento_emoji = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento_ia, "😐")
-            tendencia_emoji = {"MELHORANDO": "📈", "PIORANDO": "📉", "ESTAVEL": "➡️"}.get(tendencia_ia, "➡️")
-            st.markdown("### Sentimento e Tendencia")
-            st.markdown(f"**Sentimento atual:** {sentimento_emoji} {sentimento_ia}")
-            st.markdown(f"**Tendencia:** {tendencia_emoji} {tendencia_ia}")
-            st.markdown("### Previsao de Crescimento (7 dias)")
-            seta = "📈" if crescimento_pct > 0 else "📉"
-            st.markdown(f"{seta} **{crescimento_pct:+.1f}%** *(dados simulados)*")
-            st.markdown("### Principais Termos e Hashtags")
-            st.markdown(hashtags_ia)
-            
-            # ── ABA 3 — TERRITÓRIO DE MARCA ───────────────────────────────
+            sent_cor = {"POSITIVO": "#4CAF50", "NEGATIVO": "#F44336", "NEUTRO": "#B99A70"}.get(sentimento_ia, "#B99A70")
+            tend_icon = {"MELHORANDO": "▲", "PIORANDO": "▼", "ESTAVEL": "◆"}.get(tendencia_ia, "◆")
+            seta = "▲" if crescimento_pct > 0 else "▼"
+            st.markdown(f"""
+            <div class="analise-card" style="margin-bottom:1rem;">
+                <div class="analise-label">Sentimento</div>
+                <div style="font-family:'Space Grotesk'; font-size:1.3rem; color:{sent_cor}; font-weight:700;">{sentimento_ia}</div>
+                <div style="font-size:0.8rem; color:#F4F4F1; margin-top:0.3rem;">{tend_icon} Tendência: {tendencia_ia}</div>
+            </div>
+            <div class="analise-card" style="margin-bottom:1rem;">
+                <div class="analise-label">Previsão 7 dias</div>
+                <div style="font-family:'Space Grotesk'; font-size:2rem; color:#B99A70; font-weight:700;">{seta} {crescimento_pct:+.1f}%</div>
+                <div style="font-size:0.75rem; color:#F4F4F1;">dados simulados</div>
+            </div>
+            <div class="analise-card">
+                <div class="analise-label">Hashtags e termos</div>
+                <div class="analise-text">{hashtags_ia}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ── ABA 3 ──────────────────────────────────────────────────
 with aba3:
-    st.subheader("🎯 Hot Topics por Território de Marca")
-    st.caption("Digite o território de marca para descobrir os assuntos mais quentes dentro dele.")
+    st.markdown('<div class="section-title">🎯 Território de Marca</div>', unsafe_allow_html=True)
+    st.markdown('<p>Digite o território para mapear o que está em alta dentro dele agora.</p>', unsafe_allow_html=True)
+    territorio = st.text_input("", placeholder="Ex: Futebol, Beleza, Tecnologia...", key="territorio_input")
 
-    territorio = st.text_input("Digite o território:", placeholder="Ex: Futebol, Beleza, Tecnologia, Sustentabilidade...")
-
-    if st.button("🎯 Analisar território") and territorio:
+    if st.button("⚔ Analisar território", key="btn_territorio") and territorio:
         territorio_url = territorio.replace(" ", "+")
 
-        with st.spinner(f"Buscando top 10 assuntos em '{territorio}'..."):
-
-            # ── SEÇÃO 1: Busca ativa no território ───────────────
+        with st.spinner("Mapeando território..."):
             topicos_territorio = []
-
-            # YouTube — busca vídeos do território
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(
-                    part="snippet",
-                    q=territorio,
-                    type="video",
-                    order="viewCount",
-                    regionCode="BR",
-                    maxResults=10
-                ).execute()
-                videos = resposta_yt.get("items", [])
-                for v in videos:
-                    topicos_territorio.append({
-                        "titulo": v["snippet"]["title"],
-                        "canal": v["snippet"]["channelTitle"],
-                        "plataforma": "YouTube",
-                        "fonte": "busca_ativa"
-                    })
+                resposta_yt = youtube.search().list(part="snippet", q=territorio, type="video", order="viewCount", regionCode="BR", maxResults=10).execute()
+                for v in resposta_yt.get("items", []):
+                    topicos_territorio.append({"titulo": v["snippet"]["title"], "canal": v["snippet"]["channelTitle"], "plataforma": "YouTube"})
             except:
                 pass
 
-            # Google Trends — verifica se território está em alta
-            topicos_trends_relacionados = []
-            try:
-                url = "https://trends.google.com/trending/rss?geo=BR"
-                headers = {"User-Agent": "Mozilla/5.0"}
-                resposta = requests.get(url, headers=headers, timeout=10)
-                root = ET.fromstring(resposta.content)
-                trends = [item.find("title").text for item in root.findall(".//item")]
-                for t in trends:
-                    topicos_trends_relacionados.append(t)
-            except:
-                pass
-
-            # ── SEÇÃO 2: Filtro inteligente via IA ───────────────
             topicos_painel_relacionados = []
             if client and dados:
                 try:
                     titulos_painel = [t["titulo"] for t in dados[:20]]
                     lista_titulos = "\n".join([f"- {t}" for t in titulos_painel])
-
-                    resp_filtro = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=500,
-                        messages=[{"role": "user", "content": f"""Você é um analista de social listening.
-
-Território de marca: "{territorio}"
-
-Lista de tópicos em alta nas redes sociais agora:
-{lista_titulos}
-
-Identifique quais tópicos dessa lista têm relação direta ou indireta com o território "{territorio}".
-Responda APENAS com os títulos relacionados, um por linha, sem numeração ou explicação.
-Se nenhum tiver relação, responda: NENHUM"""}]
-                    )
+                    resp_filtro = client.messages.create(model="claude-sonnet-4-6", max_tokens=500, messages=[{"role": "user", "content": f'Território: "{territorio}". Tópicos: {lista_titulos}. Quais têm relação? APENAS os títulos, um por linha. Se nenhum: NENHUM'}])
                     resultado = resp_filtro.content[0].text.strip()
                     if resultado != "NENHUM":
                         topicos_painel_relacionados = [t.strip() for t in resultado.split("\n") if t.strip()]
                 except:
                     pass
 
-            # ── Gera análise geral do território via IA ───────────
-            analise_territorio = ""
-            oportunidade_territorio = ""
+            analise_territorio = oportunidade_territorio = ""
+            temas_recomendados = []
             if client:
                 try:
                     noticias_territorio = buscar_contexto_google_news(territorio)
-                    contexto_noticias = "\n".join([f"- {n}" for n in noticias_territorio]) if noticias_territorio else "Nenhuma notícia encontrada."
+                    contexto_noticias = "\n".join([f"- {n}" for n in noticias_territorio]) if noticias_territorio else "Nenhuma notícia."
                     top_videos_str = "\n".join([f"- {t['titulo']} ({t['canal']})" for t in topicos_territorio[:5]])
 
-                    resp_analise = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=400,
-                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior. Território: "{territorio}".
+Vídeos: {top_videos_str}
+Notícias: {contexto_noticias}
 
-Território de marca analisado: "{territorio}"
+4 parágrafos completos:
+1. O que está acontecendo agora
+2. Subtema dominante com detalhe completo
+3. Perfil completo do público
+4. Momento: aquecendo/pico/esfriando com justificativa
 
-Top vídeos em alta no YouTube dentro desse território agora:
-{top_videos_str}
-
-Notícias recentes relacionadas:
-{contexto_noticias}
-
-Escreva uma análise em 4 frases sobre:
-1. O que está acontecendo agora dentro desse território
-2. Qual subtema específico está dominando a conversa
-3. Qual é o perfil do público engajado nesse território agora
-4. Qual é o momento atual do território (aquecendo, no pico, esfriando)"""}]
-                    )
-                    analise_territorio = resp_analise.content[0].text
+Sem cortar."""}])
+                    analise_territorio = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp_oportunidade = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1000, messages=[{"role": "user", "content": f"""Estrategista. Território: "{territorio}".
+Vídeos: {top_videos_str}. Notícias: {contexto_noticias}.
 
-Território de marca: "{territorio}"
+3 parágrafos completos:
+1. Maior oportunidade de marca
+2. Formato e plataforma ideais
+3. O que evitar
 
-Top assuntos em alta dentro desse território agora:
-{top_videos_str}
+Sem cortar."""}])
+                    oportunidade_territorio = resp.content[0].text
+                    time.sleep(0.5)
 
-Notícias recentes:
-{contexto_noticias}
-
-Em 3 frases diretas, sem títulos ou markdown:
-1. Qual é a maior oportunidade de marca dentro desse território agora
-2. Qual formato de conteúdo e plataforma aproveitar nesse momento
-3. O que evitar para não parecer oportunista ou fora de contexto"""}]
-                    )
-                    oportunidade_territorio = resp_oportunidade.content[0].text
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=300, messages=[{"role": "user", "content": f'Território: "{territorio}". 8 subtemas em alta agora. Emoji + subtema, um por linha.'}])
+                    temas_recomendados = [t.strip() for t in resp.content[0].text.strip().split("\n") if t.strip()]
                 except:
                     pass
 
-        # ── EXIBIR RESULTADOS ─────────────────────────────────
         st.markdown("---")
-        st.markdown(f"# 🎯 Território: **{territorio}**")
-        st.markdown("---")
+        st.markdown(f"""
+        <div style="margin-bottom:1.5rem;">
+            <div style="font-family:'Space Grotesk'; font-size:1.8rem; font-weight:700; color:#B99A70;">🎯 {territorio.upper()}</div>
+            <div style="font-size:0.75rem; letter-spacing:0.15em; color:#F4F4F1; text-transform:uppercase;">TERRITÓRIO &nbsp;·&nbsp; {len(topicos_territorio)} SINAIS</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Análise geral
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("### 📊 O que está acontecendo nesse território")
-            st.markdown(analise_territorio if analise_territorio else "Não foi possível gerar análise.")
+            st.markdown(f'<div class="analise-card"><div class="analise-label">O que está acontecendo</div><div class="analise-text">{analise_territorio or "Não foi possível gerar análise."}</div></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown("### 💡 Oportunidade para marcas")
-            st.markdown(oportunidade_territorio if oportunidade_territorio else "Não foi possível gerar oportunidade.")
+            st.markdown(f'<div class="analise-card-gold"><div class="analise-label">Oportunidade para marcas</div><div class="analise-text">{oportunidade_territorio or "Não foi possível gerar oportunidade."}</div></div>', unsafe_allow_html=True)
 
         st.markdown("---")
+        st.markdown('<div class="section-title">🔥 Top conteúdos</div>', unsafe_allow_html=True)
+        for i, t in enumerate(topicos_territorio[:10], 1):
+            num_class = "rank-number-gold" if i <= 3 else "rank-number"
+            st.markdown(f'<div class="rank-item"><div class="{num_class}">{i:02d}</div><div><div class="rank-title">{t["titulo"]}</div><div class="rank-meta">▶ {t["canal"]}</div></div></div>', unsafe_allow_html=True)
 
-        # Top 10 do território
-        st.markdown("### 🔥 Top 10 assuntos em alta no território")
-        if topicos_territorio:
-            for i, t in enumerate(topicos_territorio[:10], 1):
-                st.markdown(f"**{i}.** {t['titulo']} — *{t['canal']}* ({t['plataforma']})")
-        else:
-            st.warning("Nenhum assunto encontrado para esse território.")
-
-        st.markdown("---")
-
-        # Tópicos do painel relacionados
-        st.markdown("### 🔗 Tópicos do painel geral relacionados ao território")
         if topicos_painel_relacionados:
+            st.markdown("---")
+            st.markdown('<div class="section-title">🔗 Tópicos do radar relacionados</div>', unsafe_allow_html=True)
+            label_map_local = {"P": "EMERGENTE", "M": "CRESCENDO", "G": "MAINSTREAM"}
             for t in topicos_painel_relacionados:
-                # Busca classificação do tópico no painel
                 topico_completo = next((x for x in dados if x["titulo"] == t), None)
                 if topico_completo:
-                    emoji = {"P": "🌱", "M": "📈", "G": "🔥"}[topico_completo["classificacao"]]
-                    st.markdown(f"{emoji} [{topico_completo['classificacao']}] {t} — *{topico_completo['plataforma']}*")
-                else:
-                    st.markdown(f"• {t}")
-        else:
-            st.info("Nenhum tópico do painel geral foi relacionado a esse território.")
+                    c = topico_completo["classificacao"]
+                    st.markdown(f'<p style="margin:0.4rem 0;"><span class="badge badge-{c.lower()}">{label_map_local[c]}</span> &nbsp; {t}</p>', unsafe_allow_html=True)
 
+        if temas_recomendados:
+            st.markdown("---")
+            st.markdown('<div class="section-title">📋 Temas para monitorar</div>', unsafe_allow_html=True)
+            col3, col4 = st.columns(2)
+            metade = len(temas_recomendados) // 2
+            with col3:
+                for t in temas_recomendados[:metade]:
+                    st.markdown(f'<p style="margin:0.3rem 0; color:#F4F4F1;">▸ {t}</p>', unsafe_allow_html=True)
+            with col4:
+                for t in temas_recomendados[metade:]:
+                    st.markdown(f'<p style="margin:0.3rem 0; color:#F4F4F1;">▸ {t}</p>', unsafe_allow_html=True)
 
-# Lista de temas recomendados dentro do território
         st.markdown("---")
-        st.markdown("### 📋 Temas recomendados para explorar nesse território")
-        
-        if client:
-            try:
-                top_videos_para_temas = "\n".join([f"- {t['titulo']}" for t in topicos_territorio[:10]])
-                
-                resp_temas = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=300,
-                    messages=[{"role": "user", "content": f"""Você é um analista de social listening de uma agência de publicidade brasileira.
-
-Território analisado: "{territorio}"
-
-Assuntos em alta dentro desse território agora:
-{top_videos_para_temas}
-
-Notícias recentes:
-{contexto_noticias}
-
-Com base nesses dados reais, liste 8 subtemas ou tópicos específicos que uma marca deveria monitorar dentro do território "{territorio}" agora.
-
-Formato: um tema por linha, começando com emoji relevante, sem numeração.
-Exemplo:
-⚽ Transferências de jogadores brasileiros
-🏆 Desempenho do Brasil nas eliminatórias"""}]
-                )
-                
-                temas_recomendados = resp_temas.content[0].text.strip().split("\n")
-                temas_recomendados = [t.strip() for t in temas_recomendados if t.strip()]
-                
-                col_temas1, col_temas2 = st.columns(2)
-                metade = len(temas_recomendados) // 2
-                
-                with col_temas1:
-                    for tema_rec in temas_recomendados[:metade]:
-                        st.markdown(f"- {tema_rec}")
-                with col_temas2:
-                    for tema_rec in temas_recomendados[metade:]:
-                        st.markdown(f"- {tema_rec}")
-                        
-            except:
-                st.info("Não foi possível gerar lista de temas recomendados.")
-        # Links de pesquisa
-        st.markdown("---")
-        st.markdown("### 🔗 Pesquisar no território")
-        col3, col4, col5 = st.columns(3)
-        with col3:
-            st.markdown(f"[🔍 YouTube](<https://www.youtube.com/results?search_query={territorio_url}>)")
-            st.markdown(f"[🔍 Google](<https://www.google.com/search?q={territorio_url}>)")
-        with col4:
-            st.markdown(f"[🔍 TikTok](<https://www.tiktok.com/search?q={territorio_url}>)")
-            st.markdown(f"[🔍 Instagram](<https://www.instagram.com/explore/tags/{territorio_url}/>)")
+        st.markdown('<div class="section-title">🔗 Pesquisar</div>', unsafe_allow_html=True)
+        col5, col6, col7 = st.columns(3)
         with col5:
-            st.markdown(f"[🔍 X/Twitter](<https://x.com/search?q={territorio_url}>)")
-            st.markdown(f"[🔍 Reddit](<https://www.reddit.com/search/?q={territorio_url}>)")
-            
-            # ── ABA 4 — RADAR DE CATEGORIA ────────────────────────────────
+            st.markdown(f'<a href="https://www.youtube.com/results?search_query={territorio_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">▶ YouTube</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.google.com/search?q={territorio_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">🔍 Google</a>', unsafe_allow_html=True)
+        with col6:
+            st.markdown(f'<a href="https://www.tiktok.com/search?q={territorio_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◐ TikTok</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.instagram.com/explore/tags/{territorio_url}/" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◈ Instagram</a>', unsafe_allow_html=True)
+        with col7:
+            st.markdown(f'<a href="https://x.com/search?q={territorio_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◉ X/Twitter</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.reddit.com/search/?q={territorio_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◎ Reddit</a>', unsafe_allow_html=True)
+
+# ── ABA 4 ──────────────────────────────────────────────────
 with aba4:
-    st.subheader("🏷️ Radar de Categoria")
-    st.caption("Digite uma categoria de mercado para ver o que está em alta e quais marcas estão em destaque.")
+    st.markdown('<div class="section-title">🏷️ Radar de Categoria</div>', unsafe_allow_html=True)
+    st.markdown('<p>Digite uma categoria ou indústria para mapear produtos, marcas e particularidades em destaque agora.</p>', unsafe_allow_html=True)
+    categoria = st.text_input("", placeholder="Ex: Cerveja, Smartphones, Cosméticos, Carros...", key="categoria_input")
 
-    categoria = st.text_input("Digite a categoria:", placeholder="Ex: Cerveja, Smartphones, Cosméticos, Streaming...")
-
-    if st.button("🏷️ Analisar categoria") and categoria:
+    if st.button("⚔ Analisar categoria", key="btn_categoria") and categoria:
         categoria_url = categoria.replace(" ", "+")
 
-        with st.spinner(f"Analisando categoria '{categoria}'..."):
-
-            # ── Coleta dados da categoria ─────────────────────
+        with st.spinner("Mapeando categoria..."):
             videos_categoria = []
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(
-                    part="snippet",
-                    q=categoria,
-                    type="video",
-                    order="viewCount",
-                    regionCode="BR",
-                    maxResults=15
-                ).execute()
+                resposta_yt = youtube.search().list(part="snippet", q=categoria, type="video", order="viewCount", regionCode="BR", maxResults=15).execute()
                 for v in resposta_yt.get("items", []):
-                    videos_categoria.append({
-                        "titulo": v["snippet"]["title"],
-                        "canal": v["snippet"]["channelTitle"],
-                        "descricao": v["snippet"].get("description", "")[:200]
-                    })
+                    videos_categoria.append({"titulo": v["snippet"]["title"], "canal": v["snippet"]["channelTitle"]})
             except:
                 pass
 
-            # Notícias da categoria
             noticias_categoria = buscar_contexto_google_news(categoria)
-            contexto_noticias_cat = "\n".join([f"- {n}" for n in noticias_categoria]) if noticias_categoria else "Nenhuma notícia encontrada."
+            noticias_marcas1 = buscar_contexto_google_news(f"{categoria} marca lançamento")
+            noticias_marcas2 = buscar_contexto_google_news(f"{categoria} campanha publicidade")
+            noticias_marcas3 = buscar_contexto_google_news(f"melhores marcas {categoria} 2025")
 
-            # Contexto dos vídeos
-            contexto_videos_cat = "\n".join([f"- {v['titulo']} (canal: {v['canal']})" for v in videos_categoria[:10]]) if videos_categoria else "Nenhum vídeo encontrado."
+            contexto_noticias_cat = "\n".join([f"- {n}" for n in noticias_categoria]) if noticias_categoria else "Nenhuma notícia."
+            contexto_videos_cat = "\n".join([f"- {v['titulo']} (canal: {v['canal']})" for v in videos_categoria[:10]]) if videos_categoria else "Nenhum vídeo."
+            todas_noticias_marcas = noticias_marcas1 + noticias_marcas2 + noticias_marcas3
+            contexto_noticias_marcas = "\n".join([f"- {n}" for n in todas_noticias_marcas]) if todas_noticias_marcas else "Nenhuma notícia de marcas."
 
-            # ── IA: Análise da categoria ──────────────────────
-            analise_categoria = ""
-            marcas_destaque = ""
-            oportunidade_categoria = ""
-            temas_categoria = ""
+            analise_categoria = marcas_destaque = oportunidade_categoria = produtos_destaque = ""
+            temas_categoria = []
 
             if client:
                 try:
-                    # Análise geral
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=400,
-                        messages=[{"role": "user", "content": f"""Você é um analista sênior de social listening de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior. Categoria: "{categoria}".
+Vídeos: {contexto_videos_cat}
+Notícias: {contexto_noticias_cat}
 
-Categoria analisada: "{categoria}"
+4 parágrafos completos:
+1. O que está acontecendo agora
+2. Produto ou segmento dominando — detalhe completo
+3. Perfil completo do consumidor
+4. Momento: aquecendo/pico/esfriando com justificativa
 
-Vídeos em alta no YouTube sobre essa categoria agora:
-{contexto_videos_cat}
-
-Notícias recentes:
-{contexto_noticias_cat}
-
-Escreva uma análise em 4 frases sobre:
-1. O que está acontecendo nessa categoria agora
-2. Qual subtema ou produto específico está dominando a conversa
-3. Qual é o perfil do consumidor engajado nessa categoria
-4. Se a categoria está aquecendo, no pico ou esfriando"""}]
-                    )
+Sem cortar."""}])
                     analise_categoria = resp.content[0].text
                     time.sleep(0.5)
 
-                    # Marcas em destaque
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=400,
-                        messages=[{"role": "user", "content": f"""Você é um analista de social listening.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=700, messages=[{"role": "user", "content": f"""Analista de produto. Categoria: "{categoria}".
+Vídeos: {contexto_videos_cat}
+Notícias: {contexto_noticias_cat}
 
-Categoria: "{categoria}"
+2 blocos completos:
+PRODUTOS EM DESTAQUE:
+- Nome — motivo completo
 
-Conteúdos em alta encontrados:
-{contexto_videos_cat}
+INGREDIENTES / COMPONENTES / PARTICULARIDADES:
+- Atributo — por que está sendo valorizado
 
-Notícias:
-{contexto_noticias_cat}
+Sem cortar."""}])
+                    produtos_destaque = resp.content[0].text
+                    time.sleep(0.5)
 
-Identifique as marcas que aparecem em destaque nessa categoria agora.
-Para cada marca encontrada, informe em uma linha:
-- Nome da marca
-- Por que está em destaque (uma frase curta)
-- Sentimento: POSITIVO, NEGATIVO ou NEUTRO
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=800, messages=[{"role": "user", "content": f"""Analista de inteligência de mercado. Categoria: "{categoria}".
 
-Formato por linha: MARCA | MOTIVO | SENTIMENTO
-Se não encontrar marcas específicas, diga claramente."""}]
-                    )
+VÍDEOS: {contexto_videos_cat}
+NOTÍCIAS: {contexto_noticias_cat}
+NOTÍCIAS DE MARCAS: {contexto_noticias_marcas}
+
+Para cada marca encontrada, escreva EXATAMENTE:
+[NOME DA MARCA] | [O que está acontecendo] | [Onde aparece] | [POSITIVO ou NEGATIVO ou NEUTRO] | [O que concorrentes podem fazer]
+
+Exemplo:
+Brahma | Lançou campanha com Neymar | YouTube e TV | POSITIVO | Concorrentes podem reagir com ativações em bares
+
+Use apenas marcas dos dados. Se não houver, liste as principais com nota: sem dados concretos."""}])
                     marcas_destaque = resp.content[0].text
                     time.sleep(0.5)
 
-                    # Oportunidade
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Você é um estrategista de marketing de uma agência de publicidade brasileira.
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1000, messages=[{"role": "user", "content": f"""Estrategista. Categoria: "{categoria}".
+Vídeos: {contexto_videos_cat}. Notícias: {contexto_noticias_cat}.
 
-Categoria: "{categoria}"
+3 parágrafos completos:
+1. Maior oportunidade agora
+2. Formato e plataforma ideais
+3. O que evitar
 
-Conteúdos em alta:
-{contexto_videos_cat}
-
-Notícias:
-{contexto_noticias_cat}
-
-Em 3 frases diretas, sem títulos ou markdown:
-1. Qual é a maior oportunidade para uma marca nessa categoria agora
-2. Qual formato de conteúdo e plataforma aproveitar
-3. O que evitar para não parecer genérico ou oportunista"""}]
-                    )
+Sem cortar."""}])
                     oportunidade_categoria = resp.content[0].text
                     time.sleep(0.5)
 
-                    # Temas em alta na categoria
-                    resp = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Analista de social listening.
-
-Categoria: "{categoria}"
-
-Conteúdos em alta:
-{contexto_videos_cat}
-
-Liste 8 temas específicos em alta dentro da categoria "{categoria}" agora.
-Formato: um tema por linha com emoji relevante, sem numeração."""}]
-                    )
-                    temas_categoria = resp.content[0].text.strip().split("\n")
-                    temas_categoria = [t.strip() for t in temas_categoria if t.strip()]
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=300, messages=[{"role": "user", "content": f'Categoria: "{categoria}". 8 temas em alta agora. Emoji + tema, um por linha.'}])
+                    temas_categoria = [t.strip() for t in resp.content[0].text.strip().split("\n") if t.strip()]
 
                 except Exception as e:
                     analise_categoria = f"Erro: {e}"
 
-        # ── EXIBIR RESULTADOS ─────────────────────────────────
         st.markdown("---")
-        st.markdown(f"# 🏷️ Categoria: **{categoria}**")
-        st.markdown("---")
+        st.markdown(f"""
+        <div style="margin-bottom:1.5rem;">
+            <div style="font-family:'Space Grotesk'; font-size:1.8rem; font-weight:700; color:#B99A70;">🏷️ {categoria.upper()}</div>
+            <div style="font-size:0.75rem; letter-spacing:0.15em; color:#F4F4F1; text-transform:uppercase;">RADAR DE CATEGORIA &nbsp;·&nbsp; {len(videos_categoria)} SINAIS</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Análise + Oportunidade
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("### 📊 O que está acontecendo nessa categoria")
-            st.markdown(analise_categoria if analise_categoria else "Não foi possível gerar análise.")
+            st.markdown(f'<div class="analise-card"><div class="analise-label">O que está acontecendo</div><div class="analise-text">{analise_categoria or "Não foi possível gerar análise."}</div></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown("### 💡 Oportunidade para marcas")
-            st.markdown(oportunidade_categoria if oportunidade_categoria else "Não foi possível gerar oportunidade.")
+            st.markdown(f'<div class="analise-card-gold"><div class="analise-label">Oportunidade para marcas</div><div class="analise-text">{oportunidade_categoria or "Não foi possível gerar oportunidade."}</div></div>', unsafe_allow_html=True)
 
         st.markdown("---")
+        st.markdown(f'<div class="analise-card" style="border-color:#6C9EFF;"><div class="analise-label" style="color:#6C9EFF;">Produtos, ingredientes e particularidades</div><div class="analise-text">{produtos_destaque or "Não foi possível identificar."}</div></div>', unsafe_allow_html=True)
 
-        # Marcas em destaque
-        st.markdown("### 🏆 Marcas em destaque na categoria")
-        if marcas_destaque and "não encontr" not in marcas_destaque.lower():
+        st.markdown("---")
+        st.markdown('<div class="section-title">🏆 Marcas em destaque</div>', unsafe_allow_html=True)
+        if marcas_destaque:
             linhas = [l.strip() for l in marcas_destaque.split("\n") if l.strip() and "|" in l]
             if linhas:
-                for linha in linhas:
+                for i, linha in enumerate(linhas):
                     partes = [p.strip() for p in linha.split("|")]
                     if len(partes) >= 5:
-                        marca, acontecendo, plataforma, sentimento, recomendacao = partes[0], partes[1], partes[2], partes[3], partes[4]
-                        emoji_sent = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento.strip().upper(), "😐")
-                        with st.expander(f"**{marca}** {emoji_sent} {sentimento.strip()}"):
-                            st.markdown(f"**O que está acontecendo:** {acontecendo}")
-                            st.markdown(f"**Onde:** {plataforma}")
-                            st.markdown(f"**Para concorrentes:** {recomendacao}")
-                    elif len(partes) >= 3:
-                        marca, motivo, sentimento = partes[0], partes[1], partes[2]
-                        emoji_sent = {"POSITIVO": "😊", "NEGATIVO": "😟", "NEUTRO": "😐"}.get(sentimento.strip().upper(), "😐")
-                        st.markdown(f"**{marca}** {emoji_sent} — {motivo}")
-                    else:
-                        st.markdown(f"• {linha}")
+                        nome_marca = partes[0].strip("[]")
+                        acontecendo = partes[1]
+                        onde = partes[2]
+                        sentimento = partes[3]
+                        recomendacao = partes[4]
+                        sent_cor = {"POSITIVO": "#4CAF50", "NEGATIVO": "#F44336", "NEUTRO": "#B99A70"}.get(sentimento.strip().upper(), "#B99A70")
+                        st.markdown(f"""
+                        <div class="analise-card" style="margin-bottom:1rem; border-left: 3px solid #B99A70;">
+                            <div style="font-family:'Space Grotesk'; font-weight:700; font-size:1rem; color:#F4F4F1; margin-bottom:0.5rem;">🏷️ {nome_marca}</div>
+                            <div style="font-size:0.8rem; color:#B99A70; margin-bottom:0.8rem;">{sentimento.strip()} &nbsp;·&nbsp; {onde}</div>
+                            <p style="margin:0.3rem 0; color:#F4F4F1;"><b>O que está acontecendo:</b> {acontecendo}</p>
+                            <p style="margin:0.3rem 0; color:#F4F4F1;"><b>Para concorrentes:</b> {recomendacao}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.markdown(f'<p style="margin:0.5rem 0; color:#F4F4F1;">▸ <b>{partes[0]}</b> — {partes[1]}</p>', unsafe_allow_html=True)
             else:
-                st.markdown(marcas_destaque)
+                st.markdown(f'<div class="analise-text">{marcas_destaque}</div>', unsafe_allow_html=True)
         else:
-            st.info("Nenhuma marca específica identificada nos conteúdos encontrados.")
-
-        # Top vídeos da categoria
-        st.markdown("### 🎬 Top conteúdos em alta na categoria")
-        for i, v in enumerate(videos_categoria[:10], 1):
-            st.markdown(f"**{i}.** {v['titulo']} — *{v['canal']}*")
+            st.info("Nenhuma marca identificada.")
 
         st.markdown("---")
+        st.markdown('<div class="section-title">🎬 Top conteúdos</div>', unsafe_allow_html=True)
+        for i, v in enumerate(videos_categoria[:10], 1):
+            num_class = "rank-number-gold" if i <= 3 else "rank-number"
+            st.markdown(f'<div class="rank-item"><div class="{num_class}">{i:02d}</div><div><div class="rank-title">{v["titulo"]}</div><div class="rank-meta">▶ {v["canal"]}</div></div></div>', unsafe_allow_html=True)
 
-        # Temas em alta
-        st.markdown("### 📋 Temas em alta dentro da categoria")
         if temas_categoria:
+            st.markdown("---")
+            st.markdown('<div class="section-title">📋 Temas em alta</div>', unsafe_allow_html=True)
             col3, col4 = st.columns(2)
             metade = len(temas_categoria) // 2
             with col3:
                 for t in temas_categoria[:metade]:
-                    st.markdown(f"- {t}")
+                    st.markdown(f'<p style="margin:0.3rem 0; color:#F4F4F1;">▸ {t}</p>', unsafe_allow_html=True)
             with col4:
                 for t in temas_categoria[metade:]:
-                    st.markdown(f"- {t}")
+                    st.markdown(f'<p style="margin:0.3rem 0; color:#F4F4F1;">▸ {t}</p>', unsafe_allow_html=True)
 
         st.markdown("---")
-
-        # Links de pesquisa
-        st.markdown("### 🔗 Pesquisar na categoria")
+        st.markdown('<div class="section-title">🔗 Pesquisar</div>', unsafe_allow_html=True)
         col5, col6, col7 = st.columns(3)
         with col5:
-            st.markdown(f"[🔍 YouTube](https://www.youtube.com/results?search_query={categoria_url})")
-            st.markdown(f"[🔍 Google](https://www.google.com/search?q={categoria_url})")
+            st.markdown(f'<a href="https://www.youtube.com/results?search_query={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">▶ YouTube</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.google.com/search?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">🔍 Google</a>', unsafe_allow_html=True)
         with col6:
-            st.markdown(f"[🔍 TikTok](https://www.tiktok.com/search?q={categoria_url})")
-            st.markdown(f"[🔍 Instagram](https://www.instagram.com/explore/tags/{categoria_url}/)")
+            st.markdown(f'<a href="https://www.tiktok.com/search?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◐ TikTok</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.instagram.com/explore/tags/{categoria_url}/" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◈ Instagram</a>', unsafe_allow_html=True)
         with col7:
-            st.markdown(f"[🔍 X/Twitter](https://x.com/search?q={categoria_url})")
-            st.markdown(f"[🔍 Reddit](https://www.reddit.com/search/?q={categoria_url})")
+            st.markdown(f'<a href="https://x.com/search?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◉ X/Twitter</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="https://www.reddit.com/search/?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◎ Reddit</a>', unsafe_allow_html=True)
