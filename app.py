@@ -249,7 +249,7 @@ def gerar_analise_ia(topico):
 
         resp_resumo = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=6000,
             messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tópico: "{titulo}" | {classificacao_texto} | {contexto_plataforma}
 Notícias: {contexto_noticias}
 
@@ -262,7 +262,7 @@ SENTIMENTO: [POSITIVO/NEGATIVO/NEUTRO] — [1 frase sobre o tom]"""}]
 
         resp_rec = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=500,
+            max_tokens=1500,
             messages=[{"role": "user", "content": f"""Estrategista de marketing. Tópico: "{titulo}" | {classificacao_texto} | {plataforma}
 Notícias: {contexto_noticias}
 
@@ -425,7 +425,7 @@ with aba2:
             if client:
                 try:
                     hoje = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
-                    resp_pmg = client.messages.create(model="claude-sonnet-4-6", max_tokens=50, messages=[{"role": "user", "content": f'Classifique "{tema}" considerando: data {hoje}, plataformas {plataformas_ativas}, volume {volume_total}. Responda APENAS: P, M ou G.'}])
+                    resp_pmg = client.messages.create(model="claude-sonnet-4-6", max_tokens=150, messages=[{"role": "user", "content": f'Classifique "{tema}" considerando: data {hoje}, plataformas {plataformas_ativas}, volume {volume_total}. Responda APENAS: P, M ou G.'}])
                     classificacao = resp_pmg.content[0].text.strip().upper()
                     if classificacao not in ["P", "M", "G"]:
                         classificacao = "M" if plataformas_ativas >= 1 else "P"
@@ -445,7 +445,7 @@ with aba2:
                         videos_str = "\n".join([f"- {v}" for v in dados_plataformas["YouTube"]["itens"]])
                         contexto_youtube = f"\nVídeos em alta:\n{videos_str}"
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tema: "{tema}" ({label_pmg}).
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=3000, messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tema: "{tema}" ({label_pmg}).
 Notícias: {contexto_noticias_tema}{contexto_youtube}
 
 3 parágrafos completos:
@@ -457,7 +457,7 @@ Sem cortar."""}])
                     resumo_ia = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1200, messages=[{"role": "user", "content": f"""Estrategista de marketing. Tema: "{tema}" ({label_pmg}).
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=7600, messages=[{"role": "user", "content": f"""Estrategista de marketing. Tema: "{tema}" ({label_pmg}).
 Notícias: {contexto_noticias_tema}
 
 3 parágrafos completos:
@@ -469,17 +469,17 @@ Sem cortar."""}])
                     recomendacao_ia = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f'Sentimento sobre "{tema}". APENAS: POSITIVO, NEGATIVO ou NEUTRO.'}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=40, messages=[{"role": "user", "content": f'Sentimento sobre "{tema}". APENAS: POSITIVO, NEGATIVO ou NEUTRO.'}])
                     sentimento_ia = resp.content[0].text.strip().upper()
                     if sentimento_ia not in ["POSITIVO", "NEGATIVO", "NEUTRO"]: sentimento_ia = "NEUTRO"
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10, messages=[{"role": "user", "content": f'Tendência para "{tema}" sentimento {sentimento_ia}. APENAS: MELHORANDO, PIORANDO ou ESTAVEL.'}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=40, messages=[{"role": "user", "content": f'Tendência para "{tema}" sentimento {sentimento_ia}. APENAS: MELHORANDO, PIORANDO ou ESTAVEL.'}])
                     tendencia_ia = resp.content[0].text.strip().upper()
                     if tendencia_ia not in ["MELHORANDO", "PIORANDO", "ESTAVEL"]: tendencia_ia = "ESTAVEL"
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=200, messages=[{"role": "user", "content": f'8 hashtags e termos sobre "{tema}" para redes sociais brasileiras. Formato: #hashtag1, #hashtag2, termo1...'}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1000, messages=[{"role": "user", "content": f'8 hashtags e termos sobre "{tema}" para redes sociais brasileiras. Formato: #hashtag1, #hashtag2, termo1...'}])
                     hashtags_ia = resp.content[0].text
                 except Exception as e:
                     resumo_ia = f"Erro: {e}"
@@ -561,7 +561,7 @@ with aba3:
                 try:
                     titulos_painel = [t["titulo"] for t in dados[:20]]
                     lista_titulos = "\n".join([f"- {t}" for t in titulos_painel])
-                    resp_filtro = client.messages.create(model="claude-sonnet-4-6", max_tokens=500, messages=[{"role": "user", "content": f'Território: "{territorio}". Tópicos: {lista_titulos}. Quais têm relação? APENAS os títulos, um por linha. Se nenhum: NENHUM'}])
+                    resp_filtro = client.messages.create(model="claude-sonnet-4-6", max_tokens=5300, messages=[{"role": "user", "content": f'Território: "{territorio}". Tópicos: {lista_titulos}. Quais têm relação? APENAS os títulos, um por linha. Se nenhum: NENHUM'}])
                     resultado = resp_filtro.content[0].text.strip()
                     if resultado != "NENHUM":
                         topicos_painel_relacionados = [t.strip() for t in resultado.split("\n") if t.strip()]
@@ -576,7 +576,7 @@ with aba3:
                     contexto_noticias = "\n".join([f"- {n}" for n in noticias_territorio]) if noticias_territorio else "Nenhuma notícia."
                     top_videos_str = "\n".join([f"- {t['titulo']} ({t['canal']})" for t in topicos_territorio[:5]])
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior. Território: "{territorio}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=9000, messages=[{"role": "user", "content": f"""Analista sênior. Território: "{territorio}".
 Vídeos: {top_videos_str}
 Notícias: {contexto_noticias}
 
@@ -590,7 +590,7 @@ Sem cortar."""}])
                     analise_territorio = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1000, messages=[{"role": "user", "content": f"""Estrategista. Território: "{territorio}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=10000, messages=[{"role": "user", "content": f"""Estrategista. Território: "{territorio}".
 Vídeos: {top_videos_str}. Notícias: {contexto_noticias}.
 
 3 parágrafos completos:
@@ -602,7 +602,7 @@ Sem cortar."""}])
                     oportunidade_territorio = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=300, messages=[{"role": "user", "content": f'Território: "{territorio}". 8 subtemas em alta agora. Emoji + subtema, um por linha.'}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=3000, messages=[{"role": "user", "content": f'Território: "{territorio}". 8 subtemas em alta agora. Emoji + subtema, um por linha.'}])
                     temas_recomendados = [t.strip() for t in resp.content[0].text.strip().split("\n") if t.strip()]
                 except:
                     pass
@@ -697,7 +697,7 @@ with aba4:
 
             if client:
                 try:
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1500, messages=[{"role": "user", "content": f"""Analista sênior. Categoria: "{categoria}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=3000, messages=[{"role": "user", "content": f"""Analista sênior. Categoria: "{categoria}".
 Vídeos: {contexto_videos_cat}
 Notícias: {contexto_noticias_cat}
 
@@ -711,7 +711,7 @@ Sem cortar."""}])
                     analise_categoria = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=700, messages=[{"role": "user", "content": f"""Analista de produto. Categoria: "{categoria}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=2300, messages=[{"role": "user", "content": f"""Analista de produto. Categoria: "{categoria}".
 Vídeos: {contexto_videos_cat}
 Notícias: {contexto_noticias_cat}
 
@@ -726,7 +726,7 @@ Sem cortar."""}])
                     produtos_destaque = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=800, messages=[{"role": "user", "content": f"""Analista de inteligência de mercado. Categoria: "{categoria}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=7000, messages=[{"role": "user", "content": f"""Analista de inteligência de mercado. Categoria: "{categoria}".
 
 VÍDEOS: {contexto_videos_cat}
 NOTÍCIAS: {contexto_noticias_cat}
@@ -742,7 +742,7 @@ Use apenas marcas dos dados. Se não houver, liste as principais com nota: sem d
                     marcas_destaque = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=1000, messages=[{"role": "user", "content": f"""Estrategista. Categoria: "{categoria}".
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=6000, messages=[{"role": "user", "content": f"""Estrategista. Categoria: "{categoria}".
 Vídeos: {contexto_videos_cat}. Notícias: {contexto_noticias_cat}.
 
 3 parágrafos completos:
@@ -754,7 +754,7 @@ Sem cortar."""}])
                     oportunidade_categoria = resp.content[0].text
                     time.sleep(0.5)
 
-                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=300, messages=[{"role": "user", "content": f'Categoria: "{categoria}". 8 temas em alta agora. Emoji + tema, um por linha.'}])
+                    resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=5000, messages=[{"role": "user", "content": f'Categoria: "{categoria}". 8 temas em alta agora. Emoji + tema, um por linha.'}])
                     temas_categoria = [t.strip() for t in resp.content[0].text.strip().split("\n") if t.strip()]
 
                 except Exception as e:
