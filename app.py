@@ -799,7 +799,6 @@ Sem cortar."""}])
                             <p style="margin:0.3rem 0; color:#F4F4F1;"><b>Para concorrentes:</b> {recomendacao}</p>
                         </div>
                         """, unsafe_allow_html=True)
-                        st.markdown(f'<p style="margin:0.5rem 0; color:#F4F4F1;">▸ <b>{partes[0]}</b> — {partes[1]}</p>', unsafe_allow_html=True)
             else:
                 st.markdown(f'<div class="analise-text">{marcas_destaque}</div>', unsafe_allow_html=True)
         else:
