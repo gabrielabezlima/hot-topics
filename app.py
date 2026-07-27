@@ -135,17 +135,17 @@ def coletar_youtube(api_key, regiao="BR", max_resultados=10):
     except:
         return []
 
-def coletar_reddit(client_id, client_secret, max_resultados=10):
-    if not client_id or not client_secret:
-        return []
+def coletar_reddit(max_resultados=10):
     try:
-        import praw
-        reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent="ADAGA/1.0")
+        import feedparser
         subreddits = ["brasil", "investimentos", "futebol", "tecnologia"]
         topicos = []
         for sub in subreddits:
-            for post in reddit.subreddit(sub).hot(limit=max_resultados // len(subreddits)):
-                topicos.append({"titulo": post.title, "plataforma": "reddit", "metrica_principal": post.score, "metrica_secundaria": post.num_comments})
+            limite = max(1, max_resultados // len(subreddits))
+            url = f"https://www.reddit.com/r/{sub}/hot/.rss?limit={limite}"
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                topicos.append({"titulo": entry.title, "plataforma": "reddit", "metrica_principal": len(feed.entries), "metrica_secundaria": 0})
         return topicos
     except:
         return []
@@ -284,7 +284,7 @@ def rodar_pipeline():
     todos = []
     todos += coletar_google_trends()
     todos += coletar_youtube(YOUTUBE_API_KEY)
-    todos += coletar_reddit(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+    todos += coletar_reddit()
     todos += coletar_meta(META_ACCESS_TOKEN)
     todos += coletar_twitter(TWITTER_BEARER_TOKEN)
     todos += coletar_tiktok(TIKTOK_API_KEY)
