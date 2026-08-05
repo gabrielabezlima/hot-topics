@@ -374,45 +374,59 @@ with aba1:
             ]
 
             cols_podio = st.columns(3)
-            for idx_podio in range(len(podio_rows)):
-                col = cols_podio[idx_podio]
-                row = podio_rows[idx_podio]
-                emoji, cor, metal, posicao = medalhas[idx_podio]
-                with col:
-                    classificacao = row.classificacao
-                    badge_class = f"badge-{classificacao.lower()}"
-                    icon = plataforma_icon.get(row.plataforma, "")
-                    metrica_txt = f"{row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
-                    chave = f"ia_podio_{row.plataforma}_{row.titulo[:20]}"
+        for idx_podio in range(len(podio_rows)):
+            col = cols_podio[idx_podio]
+            row = podio_rows[idx_podio]
+            emoji, cor, metal, posicao = medalhas[idx_podio]
+            with col:
+                classificacao = row.classificacao
+                icon = plataforma_icon.get(row.plataforma, "")
+                metrica_txt = f"{row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
+                chave = f"ia_podio_{row.plataforma}_{row.titulo[:20]}"
 
-                    badge_label = label_map[classificacao]
-                    badge_bg = {"P": "#0D1F3C", "M": "#2A1F0D", "G": "#2A2D33"}.get(classificacao, "#2A2D33")
-                    badge_color = {"P": "#6C9EFF", "M": "#B99A70", "G": "#F4F4F1"}.get(classificacao, "#F4F4F1")
-                    plataforma_nome = opcoes_plataforma.get(row.plataforma, row.plataforma.upper())
-                    
-                    card_html = "<div style='background:#17191D; border:2px solid " + cor + "; border-radius:12px; padding:1.2rem; text-align:center; margin-bottom:0.5rem;'>"
-                    card_html += "<div style='font-size:2.5rem; margin-bottom:0.3rem;'>" + emoji + "</div>"
-                    card_html += "<div style='font-size:0.65rem; font-weight:700; letter-spacing:0.2em; color:" + cor + "; margin-bottom:0.5rem;'>" + posicao + " LUGAR</div>"
-                    card_html += "<div style='font-size:0.95rem; font-weight:700; color:#F4F4F1; margin-bottom:0.5rem;'>" + row.titulo + "</div>"
-                    card_html += "<div style='font-size:0.7rem; color:#B99A70; margin-bottom:0.3rem;'>" + icon + " " + plataforma_nome + "</div>"
-                    if metrica_txt:
-                        card_html += "<div style='font-size:0.7rem; color:#555A61;'>" + metrica_txt + "</div>"
-                    card_html += "<div style='margin-top:0.5rem; display:inline-block; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.65rem; font-weight:600; background:" + badge_bg + "; color:" + badge_color + ";'>" + badge_label + "</div>"
-                    card_html += "</div>"
-                    
-                    st.markdown(card_html, unsafe_allow_html=True)  
+                badge_label = label_map[classificacao]
+                badge_bg = {"P": "#0D1F3C", "M": "#2A1F0D", "G": "#2A2D33"}.get(classificacao, "#2A2D33")
+                badge_color = {"P": "#6C9EFF", "M": "#B99A70", "G": "#F4F4F1"}.get(classificacao, "#F4F4F1")
+                plataforma_nome = opcoes_plataforma.get(row.plataforma, row.plataforma.upper())
 
-                    if chave in st.session_state.analises:
-                        analise = st.session_state.analises[chave]
-                        if "erro" not in analise:
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
-                                st.markdown(analise["resumo"])
-                            with col_b:
-                                st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
-                                st.markdown(analise["recomendacao"])
-                    else:
+                card_html = "<div style='background:#17191D; border:2px solid " + cor + "; border-radius:12px; padding:1.2rem; text-align:center; margin-bottom:0.5rem;'>"
+                card_html += "<div style='font-size:2.5rem; margin-bottom:0.3rem;'>" + emoji + "</div>"
+                card_html += "<div style='font-size:0.65rem; font-weight:700; letter-spacing:0.2em; color:" + cor + "; margin-bottom:0.5rem;'>" + posicao + " LUGAR</div>"
+                card_html += "<div style='font-size:0.95rem; font-weight:700; color:#F4F4F1; margin-bottom:0.5rem;'>" + row.titulo + "</div>"
+                card_html += "<div style='font-size:0.7rem; color:#B99A70; margin-bottom:0.3rem;'>" + icon + " " + plataforma_nome + "</div>"
+                if metrica_txt:
+                    card_html += "<div style='font-size:0.7rem; color:#555A61;'>" + metrica_txt + "</div>"
+                card_html += "<div style='margin-top:0.5rem; display:inline-block; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.65rem; font-weight:600; background:" + badge_bg + "; color:" + badge_color + ";'>" + badge_label + "</div>"
+                card_html += "</div>"
+
+                st.markdown(card_html, unsafe_allow_html=True)
+
+                if chave not in st.session_state.analises:
+                    if st.button("Analisar", key=chave):
+                        with st.spinner("Processando..."):
+                            analise = gerar_analise_ia(row._asdict())
+                            if analise:
+                                st.session_state.analises[chave] = analise
+                                st.rerun()
+
+        # Exibe analises do podio em largura total
+        for idx_podio in range(len(podio_rows)):
+            row = podio_rows[idx_podio]
+            emoji = medalhas[idx_podio][0]
+            chave = f"ia_podio_{row.plataforma}_{row.titulo[:20]}"
+            if chave in st.session_state.analises:
+                analise = st.session_state.analises[chave]
+                if "erro" not in analise:
+                    st.markdown(f'<div class="section-title">{emoji} Analise — {row.titulo[:50]}</div>', unsafe_allow_html=True)
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
+                        st.markdown(analise["resumo"])
+                    with col_b:
+                        st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
+                        st.markdown(analise["recomendacao"])
+
+                    if chave not in st.session_state.analises:
                         if st.button(f"Analisar", key=chave):
                             with st.spinner("Processando..."):
                                 analise = gerar_analise_ia(row._asdict())
