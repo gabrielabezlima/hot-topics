@@ -262,7 +262,7 @@ SENTIMENTO: [POSITIVO/NEGATIVO/NEUTRO] — [1 frase sobre o tom]"""}]
 
         resp_rec = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1500,
+            max_tokens=6000,
             messages=[{"role": "user", "content": f"""Estrategista de marketing. Tópico: "{titulo}" | {classificacao_texto} | {plataforma}
 Notícias: {contexto_noticias}
 
