@@ -296,7 +296,7 @@ def rodar_pipeline():
 # INTERFACE
 # ════════════════════════════════════════════════════════════
 
-aba1, aba2, aba3, aba4 = st.tabs(["⚡ RADAR GERAL", "🔍 ANÁLISE POR TEMA", "🎯 TERRITÓRIO", "🏷️ CATEGORIA"])
+aba1, aba2, aba3, aba4, aba5 = st.tabs(["⚡ RADAR GERAL", "🔍 ANÁLISE POR TEMA", "🎯 TERRITÓRIO", "🏷️ CATEGORIA", "⭐ AVALIAÇÕES"])
 
 # ── ABA 1 ──────────────────────────────────────────────────
 with aba1:
@@ -918,3 +918,87 @@ Sem cortar."""}])
         with col7:
             st.markdown(f'<a href="https://x.com/search?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◉ X/Twitter</a>', unsafe_allow_html=True)
             st.markdown(f'<a href="https://www.reddit.com/search/?q={categoria_url}" target="_blank" style="color:#B99A70; text-decoration:none; display:block; margin:0.3rem 0;">◎ Reddit</a>', unsafe_allow_html=True)
+
+            # ── ABA 5 — AVALIAÇÕES ──────────────────────────────────────
+with aba5:
+    st.markdown('<div class="section-title">⭐ Avaliações da ferramenta</div>', unsafe_allow_html=True)
+    st.markdown('<p>Deixe sua avaliação sobre o ADAGA e ajude a melhorar a ferramenta!</p>', unsafe_allow_html=True)
+
+    # Inicializa conexão com Supabase
+    try:
+        from supabase import create_client
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+    except Exception as e:
+        supabase = None
+
+    # ── Formulário de avaliação ───────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-title">Deixe sua avaliação</div>', unsafe_allow_html=True)
+
+    nome = st.text_input("Seu nome", placeholder="Ex: Ana Lima", key="aval_nome")
+    nota = st.slider("Nota", min_value=1, max_value=5, value=5, key="aval_nota")
+    
+    estrelas = "⭐" * nota
+    st.markdown(f"**{estrelas}**")
+    
+    comentario = st.text_area("Comentário", placeholder="O que você achou do ADAGA? Como ele ajudou no seu trabalho?", key="aval_comentario")
+
+    if st.button("Enviar avaliação", key="btn_avaliar"):
+        if not nome:
+            st.warning("Por favor, informe seu nome.")
+        elif not comentario:
+            st.warning("Por favor, escreva um comentário.")
+        elif supabase:
+            try:
+                supabase.table("avaliacoes").insert({
+                    "nome": nome,
+                    "nota": nota,
+                    "comentario": comentario
+                }).execute()
+                st.success("Avaliação enviada com sucesso! Obrigada pelo feedback!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao salvar: {e}")
+        else:
+            st.error("Banco de dados não configurado.")
+
+    # ── Mural de avaliações ───────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-title">Mural de avaliações</div>', unsafe_allow_html=True)
+
+    if supabase:
+        try:
+            resp = supabase.table("avaliacoes").select("*").order("created_at", desc=True).execute()
+            avaliacoes = resp.data
+
+            if avaliacoes:
+                media = sum(a["nota"] for a in avaliacoes) / len(avaliacoes)
+                st.markdown(f"""
+                <div class="analise-card" style="text-align:center; margin-bottom:1.5rem;">
+                    <div style="font-family:'Space Grotesk'; font-size:3rem; font-weight:700; color:#B99A70;">{media:.1f}</div>
+                    <div style="font-size:1.2rem;">{"⭐" * round(media)}</div>
+                    <div style="font-size:0.75rem; color:#F4F4F1; margin-top:0.3rem;">{len(avaliacoes)} avaliacao{"es" if len(avaliacoes) > 1 else ""}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                for a in avaliacoes:
+                    estrelas_card = "⭐" * a["nota"]
+                    data = a["created_at"][:10] if a.get("created_at") else ""
+                    st.markdown(f"""
+                    <div class="analise-card" style="margin-bottom:0.8rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                            <div style="font-family:'Space Grotesk'; font-weight:700; color:#F4F4F1;">{a["nome"]}</div>
+                            <div style="font-size:0.75rem; color:#555A61;">{data}</div>
+                        </div>
+                        <div style="margin-bottom:0.5rem;">{estrelas_card}</div>
+                        <div style="font-size:0.9rem; color:#F4F4F1;">{a["comentario"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("Nenhuma avaliação ainda. Seja o primeiro a avaliar!")
+        except Exception as e:
+            st.error(f"Erro ao carregar avaliações: {e}")
+    else:
+        st.info("Banco de dados não configurado.")
