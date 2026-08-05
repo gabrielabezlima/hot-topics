@@ -80,7 +80,12 @@ st.markdown("""
 .status-bar { background: #17191D; border: 1px solid #2A2D33; border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.75rem; color: #F4F4F1; letter-spacing: 0.05em; margin-bottom: 1.5rem; }
 
 .stTextInput > div > div > input { background: #F4F4F1 !important; border: 1px solid #B99A70 !important; color: #08090B !important; border-radius: 6px !important; font-family: 'Inter', sans-serif !important; }
+.stTextArea > div > div > textarea { background: #F4F4F1 !important; border: 1px solid #B99A70 !important; color: #08090B !important; border-radius: 6px !important; font-family: 'Inter', sans-serif !important; }
+.stTextArea > div > div > textarea::placeholder { color: #555A61 !important; }
 .stTextInput > div > div > input::placeholder { color: #555A61 !important; }
+.stTextArea>div>div>textarea{background:#F4F4F1!important;border:1px solid #B99A70!important;color:#08090B!important;border-radius:6px!important}
+.stTextArea>div>div>textarea::placeholder{color:#555A61!important}
+textarea{background-color:#F4F4F1!important;color:#08090B!important}
 .stSelectbox > div > div { background: #17191D !important; border: 1px solid #2A2D33 !important; color: #F4F4F1 !important; border-radius: 6px !important; }
 
 .stButton > button { background: #B99A70 !important; color: #08090B !important; border: none !important; border-radius: 6px !important; font-family: 'Space Grotesk', sans-serif !important; font-weight: 600 !important; letter-spacing: 0.05em !important; padding: 0.5rem 1.5rem !important; width: 100%; }
