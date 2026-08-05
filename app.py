@@ -303,10 +303,11 @@ with aba1:
     with st.spinner("Captando sinais..."):
         dados = rodar_pipeline()
 
-    hora_atualizacao = datetime.now(fuso_brasilia).strftime("%d/%m/%Y às %H:%M")
-    st.markdown(f'<div class="status-bar">● MONITORAMENTO ATIVO &nbsp;·&nbsp; {len(dados)} SINAIS CAPTADOS &nbsp;·&nbsp; {hora_atualizacao} &nbsp;·&nbsp; RENOVA A CADA 1H</div>', unsafe_allow_html=True)
+    hora_atualizacao = datetime.now(fuso_brasilia).strftime("%d/%m/%Y as %H:%M")
+    st.markdown(f'<div class="status-bar">MONITORAMENTO ATIVO &nbsp;.&nbsp; {len(dados)} SINAIS CAPTADOS &nbsp;.&nbsp; {hora_atualizacao} &nbsp;.&nbsp; RENOVA A CADA 1H</div>', unsafe_allow_html=True)
 
     df = pd.DataFrame(dados)
+
     if not df.empty:
         total_p = len(df[df["classificacao"] == "P"])
         total_m = len(df[df["classificacao"] == "M"])
@@ -314,71 +315,90 @@ with aba1:
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown(f'<div class="metric-card metric-p"><div class="metric-label">▲ EMERGENTES</div><div class="metric-number">{total_p}</div><div class="metric-label">sinais identificados</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card metric-p"><div class="metric-label">EMERGENTES</div><div class="metric-number">{total_p}</div><div class="metric-label">sinais identificados</div></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown(f'<div class="metric-card metric-m"><div class="metric-label">◆ CRESCENDO</div><div class="metric-number">{total_m}</div><div class="metric-label">em aceleração</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card metric-m"><div class="metric-label">CRESCENDO</div><div class="metric-number">{total_m}</div><div class="metric-label">em aceleracao</div></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown(f'<div class="metric-card metric-g"><div class="metric-label">● MAINSTREAM</div><div class="metric-number">{total_g}</div><div class="metric-label">consolidado</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card"><div class="metric-label">MAINSTREAM</div><div class="metric-number">{total_g}</div><div class="metric-label">consolidado</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">⚡ Sinais em tempo real</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Sinais em tempo real</div>', unsafe_allow_html=True)
 
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            filtro_pmg = st.selectbox("Classificação", ["Todos", "P — Emergente", "M — Crescendo", "G — Mainstream"])
+            filtro_pmg = st.selectbox("Classificacao", ["Todos", "P - Emergente", "M - Crescendo", "G - Mainstream"])
         with col_f2:
-            filtro_plataforma = st.selectbox("Plataforma", ["Todas"] + sorted(df["plataforma"].unique().tolist()))
+            opcoes_plataforma = {
+                "Todas": "Todas",
+                "google_trends": "Google Trends",
+                "youtube": "YouTube",
+                "reddit": "Reddit",
+                "instagram": "Instagram",
+                "twitter": "Twitter",
+                "tiktok": "TikTok"
+            }
+            plataformas_disponiveis = ["Todas"] + [opcoes_plataforma.get(p, p) for p in sorted(df["plataforma"].unique().tolist())]
+            filtro_plataforma_label = st.selectbox("Plataforma", plataformas_disponiveis)
+            filtro_plataforma = {v: k for k, v in opcoes_plataforma.items()}.get(filtro_plataforma_label, filtro_plataforma_label)
 
+        # Aplica filtros
         df_filtrado = df.copy()
         if filtro_pmg != "Todos":
             df_filtrado = df_filtrado[df_filtrado["classificacao"] == filtro_pmg[0]]
         if filtro_plataforma != "Todas":
             df_filtrado = df_filtrado[df_filtrado["plataforma"] == filtro_plataforma]
 
+        # Ordena por metrica principal (volumetria e engajamento) do maior para o menor
+        df_filtrado = df_filtrado.sort_values("metrica_principal", ascending=False).reset_index(drop=True)
+
+        # Limita a 10
+        df_filtrado = df_filtrado.head(30)
+
         if "analises" not in st.session_state:
             st.session_state.analises = {}
 
         label_map = {"P": "EMERGENTE", "M": "CRESCENDO", "G": "MAINSTREAM"}
-        plataforma_icon = {"google_trends": "🔍", "youtube": "▶", "reddit": "◎", "instagram": "◈", "twitter": "◉", "tiktok": "◐"}
+        plataforma_icon = {"google_trends": "G", "youtube": "YT", "reddit": "R", "instagram": "IG", "twitter": "X", "tiktok": "TT"}
 
-        for idx, row in df_filtrado.iterrows():
-            classificacao = row["classificacao"]
+        for pos, row in enumerate(df_filtrado.itertuples(index=False)):
+            classificacao = row.classificacao
             badge_class = f"badge-{classificacao.lower()}"
-            num_class = "rank-number-gold" if idx < 3 else "rank-number"
-            icon = plataforma_icon.get(row["plataforma"], "•")
-            metrica_txt = f" · {row['metrica_principal']:,} views" if row["metrica_principal"] > 0 and row["plataforma"] == "youtube" else ""
+            num_class = "rank-number-gold" if pos < 3 else "rank-number"
+            icon = plataforma_icon.get(row.plataforma, "")
+            metrica_txt = f" - {row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
+            chave = f"ia_{pos}_{row.plataforma}_{row.titulo[:20]}"
 
             st.markdown(f"""
             <div class="rank-item">
-                <div class="{num_class}">{idx+1:02d}</div>
+                <div class="{num_class}">{pos+1:02d}</div>
                 <div style="flex:1">
-                    <div class="rank-title">{row['titulo']}</div>
-                    <div class="rank-meta">{icon} {row['plataforma'].upper()}{metrica_txt} &nbsp;<span class="badge {badge_class}">{label_map[classificacao]}</span></div>
+                    <div class="rank-title">{row.titulo}</div>
+                    <div class="rank-meta">{icon} {opcoes_plataforma.get(row.plataforma, row.plataforma.upper())}{metrica_txt} &nbsp;<span class="badge {badge_class}">{label_map[classificacao]}</span></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            chave = f"ia_{idx}"
             if chave in st.session_state.analises:
                 analise = st.session_state.analises[chave]
                 if "erro" not in analise:
                     col_a, col_b = st.columns(2)
                     with col_a:
-                        st.markdown(f'<div class="analise-card"><div class="analise-label">Análise</div><div class="analise-text">{analise["resumo"]}</div></div>', unsafe_allow_html=True)
+                        st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
+                        st.markdown(analise["resumo"])
                     with col_b:
-                        st.markdown(f'<div class="analise-card-gold"><div class="analise-label">Recomendação</div><div class="analise-text">{analise["recomendacao"]}</div></div>', unsafe_allow_html=True)
+                        st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
+                        st.markdown(analise["recomendacao"])
                 else:
                     st.error(f"Erro: {analise['erro']}")
             else:
-                if st.button("⚔ Analisar", key=chave):
+                if st.button("Analisar", key=chave):
                     with st.spinner("Processando sinal..."):
-                        analise = gerar_analise_ia(row.to_dict())
+                        analise = gerar_analise_ia(row._asdict())
                         if analise:
                             st.session_state.analises[chave] = analise
                             st.rerun()
     else:
-        st.markdown('<div class="analise-card">Nenhum sinal captado. Verifique as chaves de API.</div>', unsafe_allow_html=True)
-
+        st.markdown('<div class="analise-card">Nenhum sinal captado.</div>', unsafe_allow_html=True)
 # ── ABA 2 ──────────────────────────────────────────────────
 with aba2:
     st.markdown('<div class="section-title">🔍 Análise por Tema</div>', unsafe_allow_html=True)
