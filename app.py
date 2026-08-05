@@ -360,43 +360,107 @@ with aba1:
         label_map = {"P": "EMERGENTE", "M": "CRESCENDO", "G": "MAINSTREAM"}
         plataforma_icon = {"google_trends": "G", "youtube": "YT", "reddit": "R", "instagram": "IG", "twitter": "X", "tiktok": "TT"}
 
-        for pos, row in enumerate(df_filtrado.itertuples(index=False)):
-            classificacao = row.classificacao
-            badge_class = f"badge-{classificacao.lower()}"
-            num_class = "rank-number-gold" if pos < 3 else "rank-number"
-            icon = plataforma_icon.get(row.plataforma, "")
-            metrica_txt = f" - {row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
-            chave = f"ia_{pos}_{row.plataforma}_{row.titulo[:20]}"
+       # ── PÓDIO — Top 3 ─────────────────────────────────────
+        podio_rows = list(df_filtrado.head(3).itertuples(index=False))
+        resto_rows = list(df_filtrado.iloc[3:].itertuples(index=False))
 
-            st.markdown(f"""
-            <div class="rank-item">
-                <div class="{num_class}">{pos+1:02d}</div>
-                <div style="flex:1">
-                    <div class="rank-title">{row.titulo}</div>
-                    <div class="rank-meta">{icon} {opcoes_plataforma.get(row.plataforma, row.plataforma.upper())}{metrica_txt} &nbsp;<span class="badge {badge_class}">{label_map[classificacao]}</span></div>
+        if podio_rows:
+            st.markdown('<div class="section-title">🏆 Pódio — Top 3 em alta agora</div>', unsafe_allow_html=True)
+
+            medalhas = [
+                ("🥇", "#FFD700", "OURO", "1º"),
+                ("🥈", "#C0C0C0", "PRATA", "2º"),
+                ("🥉", "#CD7F32", "BRONZE", "3º"),
+            ]
+
+            cols_podio = st.columns(3)
+            for idx_podio in range(len(podio_rows)):
+                col = cols_podio[idx_podio]
+                row = podio_rows[idx_podio]
+                emoji, cor, metal, posicao = medalhas[idx_podio]
+                with col:
+                    classificacao = row.classificacao
+                    badge_class = f"badge-{classificacao.lower()}"
+                    icon = plataforma_icon.get(row.plataforma, "")
+                    metrica_txt = f"{row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
+                    chave = f"ia_podio_{row.plataforma}_{row.titulo[:20]}"
+
+                    badge_label = label_map[classificacao]
+                    badge_bg = {"P": "#0D1F3C", "M": "#2A1F0D", "G": "#2A2D33"}.get(classificacao, "#2A2D33")
+                    badge_color = {"P": "#6C9EFF", "M": "#B99A70", "G": "#F4F4F1"}.get(classificacao, "#F4F4F1")
+                    plataforma_nome = opcoes_plataforma.get(row.plataforma, row.plataforma.upper())
+                    
+                    card_html = "<div style='background:#17191D; border:2px solid " + cor + "; border-radius:12px; padding:1.2rem; text-align:center; margin-bottom:0.5rem;'>"
+                    card_html += "<div style='font-size:2.5rem; margin-bottom:0.3rem;'>" + emoji + "</div>"
+                    card_html += "<div style='font-size:0.65rem; font-weight:700; letter-spacing:0.2em; color:" + cor + "; margin-bottom:0.5rem;'>" + posicao + " LUGAR</div>"
+                    card_html += "<div style='font-size:0.95rem; font-weight:700; color:#F4F4F1; margin-bottom:0.5rem;'>" + row.titulo + "</div>"
+                    card_html += "<div style='font-size:0.7rem; color:#B99A70; margin-bottom:0.3rem;'>" + icon + " " + plataforma_nome + "</div>"
+                    if metrica_txt:
+                        card_html += "<div style='font-size:0.7rem; color:#555A61;'>" + metrica_txt + "</div>"
+                    card_html += "<div style='margin-top:0.5rem; display:inline-block; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.65rem; font-weight:600; background:" + badge_bg + "; color:" + badge_color + ";'>" + badge_label + "</div>"
+                    card_html += "</div>"
+                    
+                    st.markdown(card_html, unsafe_allow_html=True)  
+
+                    if chave in st.session_state.analises:
+                        analise = st.session_state.analises[chave]
+                        if "erro" not in analise:
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
+                                st.markdown(analise["resumo"])
+                            with col_b:
+                                st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
+                                st.markdown(analise["recomendacao"])
+                    else:
+                        if st.button(f"Analisar", key=chave):
+                            with st.spinner("Processando..."):
+                                analise = gerar_analise_ia(row._asdict())
+                                if analise:
+                                    st.session_state.analises[chave] = analise
+                                    st.rerun()
+
+        # ── RANKING — Posições 4 a 10 ─────────────────────────
+        if resto_rows:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<div class="section-title">📋 Ranking completo</div>', unsafe_allow_html=True)
+
+            for pos, row in enumerate(resto_rows, 4):
+                classificacao = row.classificacao
+                badge_class = f"badge-{classificacao.lower()}"
+                icon = plataforma_icon.get(row.plataforma, "")
+                metrica_txt = f" - {row.metrica_principal:,} views" if row.metrica_principal > 0 and row.plataforma == "youtube" else ""
+                chave = f"ia_{pos}_{row.plataforma}_{row.titulo[:20]}"
+
+                st.markdown(f"""
+                <div class="rank-item">
+                    <div class="rank-number">{pos:02d}</div>
+                    <div style="flex:1">
+                        <div class="rank-title">{row.titulo}</div>
+                        <div class="rank-meta">{icon} {opcoes_plataforma.get(row.plataforma, row.plataforma.upper())}{metrica_txt} &nbsp;<span class="badge {badge_class}">{label_map[classificacao]}</span></div>
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-            if chave in st.session_state.analises:
-                analise = st.session_state.analises[chave]
-                if "erro" not in analise:
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
-                        st.markdown(analise["resumo"])
-                    with col_b:
-                        st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
-                        st.markdown(analise["recomendacao"])
+                if chave in st.session_state.analises:
+                    analise = st.session_state.analises[chave]
+                    if "erro" not in analise:
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.markdown('<div class="analise-card"><div class="analise-label">Analise</div></div>', unsafe_allow_html=True)
+                            st.markdown(analise["resumo"])
+                        with col_b:
+                            st.markdown('<div class="analise-card-gold"><div class="analise-label">Recomendacao</div></div>', unsafe_allow_html=True)
+                            st.markdown(analise["recomendacao"])
+                    else:
+                        st.error(f"Erro: {analise['erro']}")
                 else:
-                    st.error(f"Erro: {analise['erro']}")
-            else:
-                if st.button("Analisar", key=chave):
-                    with st.spinner("Processando sinal..."):
-                        analise = gerar_analise_ia(row._asdict())
-                        if analise:
-                            st.session_state.analises[chave] = analise
-                            st.rerun()
+                    if st.button("Analisar", key=chave):
+                        with st.spinner("Processando sinal..."):
+                            analise = gerar_analise_ia(row._asdict())
+                            if analise:
+                                st.session_state.analises[chave] = analise
+                                st.rerun()
     else:
         st.markdown('<div class="analise-card">Nenhum sinal captado.</div>', unsafe_allow_html=True)
 # ── ABA 2 ──────────────────────────────────────────────────
