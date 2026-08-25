@@ -944,35 +944,26 @@ with aba5:
     st.markdown('<p>Deixe sua avaliação sobre o ADAGA e ajude a melhorar a ferramenta!</p>', unsafe_allow_html=True)
 
     # Inicializa conexão com Supabase
-    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-    
+    SHEETS_API_URL = st.secrets.get("SHEETS_API_URL", "")
+
     def sb_select():
         try:
-            url = f"{SUPABASE_URL}/rest/v1/avaliacoes?select=*&order=created_at.desc"
-            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = requests.get(SHEETS_API_URL, timeout=10)
             return resp.json()
-        except Exception as e:
+        except:
             return []
-    
+
     def sb_insert(nome, nota, comentario):
         try:
-            url = f"{SUPABASE_URL}/rest/v1/avaliacoes"
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal"
-            }
+            import json
             dados = {"nome": nome, "nota": nota, "comentario": comentario}
-            resp = requests.post(url, headers=headers, json=dados, timeout=10)
-            return resp.status_code == 201
-        except Exception as e:
+            resp = requests.post(SHEETS_API_URL, json=dados, timeout=10)
+            return resp.status_code == 200
+        except:
             return False
-    
-    supabase = True if SUPABASE_URL and SUPABASE_KEY else None
 
+    supabase = True if SHEETS_API_URL else None
+    
     # ── Formulário de avaliação ───────────────────────────────
     st.markdown("---")
     st.markdown('<div class="section-title">Deixe sua avaliação</div>', unsafe_allow_html=True)
