@@ -944,13 +944,34 @@ with aba5:
     st.markdown('<p>Deixe sua avaliação sobre o ADAGA e ajude a melhorar a ferramenta!</p>', unsafe_allow_html=True)
 
     # Inicializa conexão com Supabase
-    try:
-        from supabase import create_client
-        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
-    except Exception as e:
-        supabase = None
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+    
+    def sb_select():
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/avaliacoes?select=*&order=created_at.desc"
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            resp = requests.get(url, headers=headers, timeout=10)
+            return resp.json()
+        except Exception as e:
+            return []
+    
+    def sb_insert(nome, nota, comentario):
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/avaliacoes"
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            }
+            dados = {"nome": nome, "nota": nota, "comentario": comentario}
+            resp = requests.post(url, headers=headers, json=dados, timeout=10)
+            return resp.status_code == 201
+        except Exception as e:
+            return False
+    
+    supabase = True if SUPABASE_URL and SUPABASE_KEY else None
 
     # ── Formulário de avaliação ───────────────────────────────
     st.markdown("---")
@@ -965,34 +986,27 @@ with aba5:
     comentario = st.text_area("Comentário", placeholder="O que você achou do ADAGA? Como ele ajudou no seu trabalho?", key="aval_comentario")
 
     if st.button("Enviar avaliação", key="btn_avaliar"):
-        if not nome:
-            st.warning("Por favor, informe seu nome.")
-        elif not comentario:
-            st.warning("Por favor, escreva um comentário.")
-        elif supabase:
-            try:
-                supabase.table("avaliacoes").insert({
-                    "nome": nome,
-                    "nota": nota,
-                    "comentario": comentario
-                }).execute()
-                st.success("Avaliação enviada com sucesso! Obrigada pelo feedback!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao salvar: {e}")
-        else:
-            st.error("Banco de dados não configurado.")
+            if not nome:
+                st.warning("Por favor, informe seu nome.")
+            elif not comentario:
+                st.warning("Por favor, escreva um comentário.")
+            elif supabase:
+                if sb_insert(nome, nota, comentario):
+                    st.success("Avaliação enviada com sucesso! Obrigada pelo feedback!")
+                    st.rerun()
+                else:
+                    st.error("Erro ao salvar. Tente novamente.")
+            else:
+                st.error("Banco de dados não configurado.")
 
     # ── Mural de avaliações ───────────────────────────────────
     st.markdown("---")
     st.markdown('<div class="section-title">Mural de avaliações</div>', unsafe_allow_html=True)
 
     if supabase:
-        try:
-            resp = supabase.table("avaliacoes").select("*").order("created_at", desc=True).execute()
-            avaliacoes = resp.data
-
-            if avaliacoes:
+        avaliacoes = sb_select()
+        if avaliacoes and isinstance(avaliacoes, list):
+            if len(avaliacoes) > 0:
                 media = sum(a["nota"] for a in avaliacoes) / len(avaliacoes)
                 st.markdown(f"""
                 <div class="analise-card" style="text-align:center; margin-bottom:1.5rem;">
@@ -1017,7 +1031,7 @@ with aba5:
                     """, unsafe_allow_html=True)
             else:
                 st.info("Nenhuma avaliação ainda. Seja o primeiro a avaliar!")
-        except Exception as e:
-            st.error(f"Erro ao carregar avaliações: {e}")
+        else:
+            st.info("Nenhuma avaliação ainda. Seja o primeiro a avaliar!")
     else:
         st.info("Banco de dados não configurado.")
