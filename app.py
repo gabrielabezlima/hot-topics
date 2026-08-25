@@ -696,16 +696,49 @@ with aba3:
     territorio = st.text_input("", placeholder='Ex: Futebol AND sustentabilidade, Beleza NOT skincare...', key="territorio_input")
     st.caption('Dica: use AND, OR, NOT e aspas para buscas avançadas. Ex: Futebol AND "Copa do Mundo", Beleza NOT skincare')
 
+    col_periodo1_t, col_periodo2_t = st.columns(2)
+    with col_periodo1_t:
+        periodo_preset_t = st.selectbox("Período", ["Últimas 24h", "Última semana", "Último mês", "Personalizado"], key="periodo_territorio")
+    with col_periodo2_t:
+        if periodo_preset_t == "Personalizado":
+            from datetime import date
+            col_de, col_ate = st.columns(2)
+            with col_de:
+                data_inicio_t = st.date_input("De", value=date.today() - timedelta(days=7), key="data_inicio_territorio")
+            with col_ate:
+                data_fim_t = st.date_input("Até", value=date.today(), key="data_fim_territorio")
+        else:
+            data_fim_t = datetime.now(fuso_brasilia)
+            if periodo_preset_t == "Últimas 24h":
+                data_inicio_t = data_fim_t - timedelta(days=1)
+            elif periodo_preset_t == "Última semana":
+                data_inicio_t = data_fim_t - timedelta(days=7)
+            elif periodo_preset_t == "Último mês":
+                data_inicio_t = data_fim_t - timedelta(days=30)
+            data_inicio_t = data_inicio_t.date() if hasattr(data_inicio_t, 'date') else data_inicio_t
+            data_fim_t = data_fim_t.date() if hasattr(data_fim_t, 'date') else data_fim_t
+
     if st.button("⚔ Analisar território", key="btn_territorio") and territorio:
         import urllib.parse
         territorio_url = urllib.parse.quote(territorio)
+        periodo_str_t = f"{data_inicio_t.strftime('%d/%m/%Y')} até {data_fim_t.strftime('%d/%m/%Y')}"
+        hoje_t = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
 
         with st.spinner("Mapeando território..."):
             topicos_territorio = []
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(part="snippet", q=territorio, type="video", order="viewCount", regionCode="BR", maxResults=10).execute()
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=territorio,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=10,
+                    publishedAfter=f"{data_inicio_t}T00:00:00Z",
+                    publishedBefore=f"{data_fim_t}T23:59:59Z"
+                ).execute()
                 for v in resposta_yt.get("items", []):
                     topicos_territorio.append({"titulo": v["snippet"]["title"], "canal": v["snippet"]["channelTitle"], "plataforma": "YouTube"})
             except:
@@ -824,16 +857,49 @@ with aba4:
     categoria = st.text_input("", placeholder='Ex: Cerveja AND artesanal, Cosméticos NOT importado...', key="categoria_input")
     st.caption('Dica: use AND, OR, NOT e aspas para buscas avançadas. Ex: "cerveja artesanal" AND Brasil, Carros NOT elétrico')
 
+    col_periodo1_c, col_periodo2_c = st.columns(2)
+    with col_periodo1_c:
+        periodo_preset_c = st.selectbox("Período", ["Últimas 24h", "Última semana", "Último mês", "Personalizado"], key="periodo_categoria")
+    with col_periodo2_c:
+        if periodo_preset_c == "Personalizado":
+            from datetime import date
+            col_de, col_ate = st.columns(2)
+            with col_de:
+                data_inicio_c = st.date_input("De", value=date.today() - timedelta(days=7), key="data_inicio_categoria")
+            with col_ate:
+                data_fim_c = st.date_input("Até", value=date.today(), key="data_fim_categoria")
+        else:
+            data_fim_c = datetime.now(fuso_brasilia)
+            if periodo_preset_c == "Últimas 24h":
+                data_inicio_c = data_fim_c - timedelta(days=1)
+            elif periodo_preset_c == "Última semana":
+                data_inicio_c = data_fim_c - timedelta(days=7)
+            elif periodo_preset_c == "Último mês":
+                data_inicio_c = data_fim_c - timedelta(days=30)
+            data_inicio_c = data_inicio_c.date() if hasattr(data_inicio_c, 'date') else data_inicio_c
+            data_fim_c = data_fim_c.date() if hasattr(data_fim_c, 'date') else data_fim_c
+
     if st.button("⚔ Analisar categoria", key="btn_categoria") and categoria:
         import urllib.parse
         categoria_url = urllib.parse.quote(categoria)
+        periodo_str_c = f"{data_inicio_c.strftime('%d/%m/%Y')} até {data_fim_c.strftime('%d/%m/%Y')}"
+        hoje_c = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
 
         with st.spinner("Mapeando categoria..."):
             videos_categoria = []
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(part="snippet", q=categoria, type="video", order="viewCount", regionCode="BR", maxResults=15).execute()
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=categoria,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=15,
+                    publishedAfter=f"{data_inicio_c}T00:00:00Z",
+                    publishedBefore=f"{data_fim_c}T23:59:59Z"
+                ).execute()
                 for v in resposta_yt.get("items", []):
                     videos_categoria.append({"titulo": v["snippet"]["title"], "canal": v["snippet"]["channelTitle"]})
             except:
@@ -855,6 +921,7 @@ with aba4:
             if client:
                 try:
                     resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=3000, messages=[{"role": "user", "content": f"""Analista sênior. Categoria: "{categoria}".
+Período analisado: {periodo_str_c} (hoje é {hoje_c} — considere se o tema já perdeu volume ou se o pico já passou)
 Vídeos: {contexto_videos_cat}
 Notícias: {contexto_noticias_cat}
 
