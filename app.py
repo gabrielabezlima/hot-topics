@@ -486,10 +486,34 @@ with aba1:
 with aba2:
     st.markdown('<div class="section-title">🔍 Análise por Tema</div>', unsafe_allow_html=True)
     st.markdown('<p>Digite um tema para gerar inteligência completa sobre ele agora.</p>', unsafe_allow_html=True)
-    tema = st.text_input("", placeholder="Ex: inteligência artificial, black friday...", key="tema_input")
+    tema = st.text_input("", placeholder='Ex: Neutrogena AND Hayden, "black friday" OR "cyber monday"...', key="tema_input")
+    st.caption('Dica: use AND, OR, NOT e aspas para buscas avançadas. Ex: Neutrogena AND crise, "beleza" NOT skincare')
+
+    col_periodo1, col_periodo2 = st.columns(2)
+    with col_periodo1:
+        periodo_preset = st.selectbox("Período", ["Últimas 24h", "Última semana", "Último mês", "Personalizado"], key="periodo_tema")
+    with col_periodo2:
+        if periodo_preset == "Personalizado":
+            from datetime import date
+            col_de, col_ate = st.columns(2)
+            with col_de:
+                data_inicio = st.date_input("De", value=date.today() - timedelta(days=7), key="data_inicio_tema")
+            with col_ate:
+                data_fim = st.date_input("Até", value=date.today(), key="data_fim_tema")
+        else:
+            data_fim = datetime.now(fuso_brasilia)
+            if periodo_preset == "Últimas 24h":
+                data_inicio = data_fim - timedelta(days=1)
+            elif periodo_preset == "Última semana":
+                data_inicio = data_fim - timedelta(days=7)
+            elif periodo_preset == "Último mês":
+                data_inicio = data_fim - timedelta(days=30)
+            data_inicio = data_inicio.date() if hasattr(data_inicio, 'date') else data_inicio
+            data_fim = data_fim.date() if hasattr(data_fim, 'date') else data_fim
 
     if st.button("⚔ Analisar tema", key="btn_tema") and tema:
-        tema_url = tema.replace(" ", "+")
+        import urllib.parse
+        tema_url = urllib.parse.quote(tema)
         links = {
             "YouTube": f"https://www.youtube.com/results?search_query={tema_url}",
             "Google": f"https://www.google.com/search?q={tema_url}",
@@ -515,7 +539,16 @@ with aba2:
             try:
                 from googleapiclient.discovery import build
                 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-                resposta_yt = youtube.search().list(part="snippet", q=tema, type="video", order="viewCount", regionCode="BR", maxResults=10).execute()
+                resposta_yt = youtube.search().list(
+                    part="snippet",
+                    q=tema,
+                    type="video",
+                    order="viewCount",
+                    regionCode="BR",
+                    maxResults=10,
+                    publishedAfter=f"{data_inicio}T00:00:00Z",
+                    publishedBefore=f"{data_fim}T23:59:59Z"
+                ).execute()
                 videos = resposta_yt.get("items", [])
                 dados_plataformas["YouTube"] = {"encontrado": len(videos) > 0, "volume": len(videos), "detalhe": f"{len(videos)} vídeos encontrados", "itens": [v["snippet"]["title"] for v in videos[:5]]}
             except Exception as e:
@@ -528,7 +561,23 @@ with aba2:
             if client:
                 try:
                     hoje = datetime.now(fuso_brasilia).strftime("%d/%m/%Y")
-                    resp_pmg = client.messages.create(model="claude-sonnet-4-6", max_tokens=150, messages=[{"role": "user", "content": f'Classifique "{tema}" considerando: data {hoje}, plataformas {plataformas_ativas}, volume {volume_total}. Responda APENAS: P, M ou G.'}])
+                    periodo_str = f"{data_inicio.strftime('%d/%m/%Y')} até {data_fim.strftime('%d/%m/%Y')}"
+                    resp_pmg = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=150,
+                        messages=[{"role": "user", "content": f"""Você é um analista de social listening.
+
+Tema analisado: "{tema}"
+Período de análise: {periodo_str}
+Data de hoje: {hoje}
+Plataformas com dados: {plataformas_ativas}
+Volume de conteúdo encontrado no período: {volume_total}
+
+Considerando que o período analisado pode ser passado (não necessariamente agora), classifique o ESTÁGIO do tema DENTRO desse período específico.
+Se o período já passou há semanas ou meses, considere que o tema pode estar em declínio hoje mesmo que tenha sido viral no período analisado.
+
+Responda APENAS: P, M ou G."""}]
+                    )
                     classificacao = resp_pmg.content[0].text.strip().upper()
                     if classificacao not in ["P", "M", "G"]:
                         classificacao = "M" if plataformas_ativas >= 1 else "P"
@@ -549,6 +598,7 @@ with aba2:
                         contexto_youtube = f"\nVídeos em alta:\n{videos_str}"
 
                     resp = client.messages.create(model="claude-sonnet-4-6", max_tokens=3000, messages=[{"role": "user", "content": f"""Analista sênior de social listening. Tema: "{tema}" ({label_pmg}).
+Período analisado: {periodo_str} (hoje é {hoje} — considere se o tema já perdeu volume ou se o pico já passou)
 Notícias: {contexto_noticias_tema}{contexto_youtube}
 
 3 parágrafos completos:
@@ -643,10 +693,12 @@ Sem cortar."""}])
 with aba3:
     st.markdown('<div class="section-title">🎯 Território de Marca</div>', unsafe_allow_html=True)
     st.markdown('<p>Digite o território para mapear o que está em alta dentro dele agora.</p>', unsafe_allow_html=True)
-    territorio = st.text_input("", placeholder="Ex: Futebol, Beleza, Tecnologia...", key="territorio_input")
+    territorio = st.text_input("", placeholder='Ex: Futebol AND sustentabilidade, Beleza NOT skincare...', key="territorio_input")
+    st.caption('Dica: use AND, OR, NOT e aspas para buscas avançadas. Ex: Futebol AND "Copa do Mundo", Beleza NOT skincare')
 
     if st.button("⚔ Analisar território", key="btn_territorio") and territorio:
-        territorio_url = territorio.replace(" ", "+")
+        import urllib.parse
+        territorio_url = urllib.parse.quote(territorio)
 
         with st.spinner("Mapeando território..."):
             topicos_territorio = []
@@ -769,10 +821,12 @@ Sem cortar."""}])
 with aba4:
     st.markdown('<div class="section-title">🏷️ Radar de Categoria</div>', unsafe_allow_html=True)
     st.markdown('<p>Digite uma categoria ou indústria para mapear produtos, marcas e particularidades em destaque agora.</p>', unsafe_allow_html=True)
-    categoria = st.text_input("", placeholder="Ex: Cerveja, Smartphones, Cosméticos, Carros...", key="categoria_input")
+    categoria = st.text_input("", placeholder='Ex: Cerveja AND artesanal, Cosméticos NOT importado...', key="categoria_input")
+    st.caption('Dica: use AND, OR, NOT e aspas para buscas avançadas. Ex: "cerveja artesanal" AND Brasil, Carros NOT elétrico')
 
     if st.button("⚔ Analisar categoria", key="btn_categoria") and categoria:
-        categoria_url = categoria.replace(" ", "+")
+        import urllib.parse
+        categoria_url = urllib.parse.quote(categoria)
 
         with st.spinner("Mapeando categoria..."):
             videos_categoria = []
@@ -963,7 +1017,7 @@ with aba5:
             return False
 
     supabase = True if SHEETS_API_URL else None
-    
+
     # ── Formulário de avaliação ───────────────────────────────
     st.markdown("---")
     st.markdown('<div class="section-title">Deixe sua avaliação</div>', unsafe_allow_html=True)
